@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.6;
 
-library CallDataRLPReader {
+library RLP {
 
     uint8 constant STRING_SHORT_START = 0x80;
     uint8 constant STRING_LONG_START = 0xb8;
@@ -12,7 +12,7 @@ library CallDataRLPReader {
     function openRlp(bytes calldata rawRlp) internal pure returns (uint256 iter) {
         uint256 rawRlpOffset;
         assembly {
-            rawRlpOffset := add(0x4, calldataload(rawRlp.offset))
+            rawRlpOffset := rawRlp.offset
         }
         return rawRlpOffset + _payloadOffset(rawRlpOffset);
     }
