@@ -31,52 +31,13 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         bytes32 blockHash;
     }
 
-    function parseParliaBlockHeader(bytes calldata blockProof) external pure returns (ParliaBlockHeader memory pbh) {
-        uint256 it = RLP.beginRlp(blockProof);
-        // parent hash, uncle hash
-        pbh.parentHash = RLP.toBytes32(it);
-        it = RLP.next(it);
-        pbh.uncleHash = RLP.toBytes32(it);
-        it = RLP.next(it);
-        // coinbase
-        pbh.coinbase = RLP.toAddress(it);
-        it = RLP.next(it);
-        // state root, transactions root, receipts root
-        pbh.stateRoot = RLP.toBytes32(it);
-        it = RLP.next(it);
-        pbh.txRoot = RLP.toBytes32(it);
-        it = RLP.next(it);
-        pbh.receiptRoot = RLP.toBytes32(it);
-        it = RLP.next(it);
-        // bloom, difficulty
-        it = RLP.next(it);
-        it = RLP.next(it);
-        // block number, gas limit, gas used, time
-        pbh.blockNumber = uint64(RLP.toUint256(it, RLP.itemLength(it)));
-        it = RLP.next(it);
-        pbh.gasLimit = uint64(RLP.toUint256(it, RLP.itemLength(it)));
-        it = RLP.next(it);
-        pbh.gasUsed = uint64(RLP.toUint256(it, RLP.itemLength(it)));
-        it = RLP.next(it);
-        pbh.blockTime = uint64(RLP.toUint256(it, RLP.itemLength(it)));
-        it = RLP.next(it);
-        // extra data
-        it = RLP.next(it);
-        // mix digest, nonce
-        pbh.mixDigest = RLP.toBytes32(it);
-        it = RLP.next(it);
-        pbh.nonce = uint64(RLP.toUint256(it, RLP.itemLength(it)));
-        it = RLP.next(it);
-        // calc block hash
-        pbh.blockHash = keccak256(blockProof);
-        return pbh;
-    }
-
-    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external view returns (bytes memory signingData) {
+    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external pure returns (bytes memory signingData, bytes memory signature) {
         // support of >64 kB headers might make code much more complicated
         require(blockProof.length <= 65535);
+        // open RLP and calc block header length after the prefix (it should be block proof length -3)
         uint256 it = RLP.openRlp(blockProof);
         uint256 originalLength = RLP.itemLength(it);
+        // skip body length
         it = RLP.beginIteration(it);
         // fast skip for the fixed fields:
         // + 33 bytes (x5): parent hash, uncle hash, state root, tx hash, receipt hash
@@ -159,7 +120,53 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             }
             // else can't be here, its unreachable
         }
-        return signingData;
+        // save signature
+        signature = new bytes(65);
+        assembly {
+            calldatacopy(add(signature, 0x20), sub(afterExtraDataOffset, 65), 65)
+        }
+        return (signingData, signature);
+    }
+
+    function parseParliaBlockHeader(bytes calldata blockProof) external pure returns (ParliaBlockHeader memory pbh) {
+        uint256 it = RLP.beginRlp(blockProof);
+        // parent hash, uncle hash
+        pbh.parentHash = RLP.toBytes32(it);
+        it = RLP.next(it);
+        pbh.uncleHash = RLP.toBytes32(it);
+        it = RLP.next(it);
+        // coinbase
+        pbh.coinbase = RLP.toAddress(it);
+        it = RLP.next(it);
+        // state root, transactions root, receipts root
+        pbh.stateRoot = RLP.toBytes32(it);
+        it = RLP.next(it);
+        pbh.txRoot = RLP.toBytes32(it);
+        it = RLP.next(it);
+        pbh.receiptRoot = RLP.toBytes32(it);
+        it = RLP.next(it);
+        // bloom, difficulty
+        it = RLP.next(it);
+        it = RLP.next(it);
+        // block number, gas limit, gas used, time
+        pbh.blockNumber = uint64(RLP.toUint256(it, RLP.itemLength(it)));
+        it = RLP.next(it);
+        pbh.gasLimit = uint64(RLP.toUint256(it, RLP.itemLength(it)));
+        it = RLP.next(it);
+        pbh.gasUsed = uint64(RLP.toUint256(it, RLP.itemLength(it)));
+        it = RLP.next(it);
+        pbh.blockTime = uint64(RLP.toUint256(it, RLP.itemLength(it)));
+        it = RLP.next(it);
+        // extra data
+        it = RLP.next(it);
+        // mix digest, nonce
+        pbh.mixDigest = RLP.toBytes32(it);
+        it = RLP.next(it);
+        pbh.nonce = uint64(RLP.toUint256(it, RLP.itemLength(it)));
+        it = RLP.next(it);
+        // calc block hash
+        pbh.blockHash = keccak256(blockProof);
+        return pbh;
     }
 
     function verifyProof(bytes calldata proof, bytes32[] calldata existingValidatorSet) external pure returns (bytes32[] memory newValidatorSet) {
