@@ -5,7 +5,7 @@ import "../interfaces/IProofVerificationFunction.sol";
 
 contract FakeVerifier is IProofVerificationFunction {
 
-    function verifyProof(uint256 /*callDataProofOffset*/, bytes32[] calldata existingValidatorSet) external pure returns (bytes32[] memory newValidatorSet) {
+    function verifyProof(bytes calldata /*proof*/, bytes32[] calldata existingValidatorSet) external pure returns (bytes32[] memory newValidatorSet) {
         return existingValidatorSet;
     }
 }

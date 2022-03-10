@@ -3,18 +3,34 @@ pragma solidity ^0.8.6;
 
 library RLP {
 
-    uint8 constant STRING_SHORT_START = 0x80;
-    uint8 constant STRING_LONG_START = 0xb8;
-    uint8 constant LIST_SHORT_START = 0xc0;
-    uint8 constant LIST_LONG_START = 0xf8;
-    uint8 constant WORD_SIZE = 32;
+    uint8 public constant STRING_SHORT_START = 0x80;
+    uint8 public constant STRING_LONG_START = 0xb8;
+    uint8 public constant LIST_SHORT_START = 0xc0;
+    uint8 public constant LIST_LONG_START = 0xf8;
+    uint8 public constant WORD_SIZE = 32;
 
     function openRlp(bytes calldata rawRlp) internal pure returns (uint256 iter) {
         uint256 rawRlpOffset;
         assembly {
             rawRlpOffset := rawRlp.offset
         }
+        return rawRlpOffset;
+    }
+
+    function beginRlp(bytes calldata rawRlp) internal pure returns (uint256 iter) {
+        uint256 rawRlpOffset;
+        assembly {
+            rawRlpOffset := rawRlp.offset
+        }
         return rawRlpOffset + _payloadOffset(rawRlpOffset);
+    }
+
+    function lengthRlp(bytes calldata rawRlp) internal pure returns (uint256 iter) {
+        uint256 rawRlpOffset;
+        assembly {
+            rawRlpOffset := rawRlp.offset
+        }
+        return itemLength(rawRlpOffset);
     }
 
     function beginIteration(uint256 offset) internal pure returns (uint256 iter) {
@@ -37,16 +53,119 @@ library RLP {
         return bytes32(toUint(ptr, 33));
     }
 
+    function toUint256(uint256 ptr, uint256 len) internal pure returns (uint256) {
+        return toUint(ptr, len);
+    }
+
+    function bytesToRlp(bytes calldata input, uint256 length) internal pure returns (bytes memory result) {
+        if (length < 56) {
+            result = new bytes(1 + length);
+            assembly {
+                calldatacopy(add(result, 0x21), input.offset, length)
+            }
+            return result;
+        }
+        bytes memory lengthRlp = uintToRlp(length);
+        result = new bytes(1 + length + lengthRlp.length);
+        for (uint256 i = 0; i < lengthRlp.length; i++) {
+            result[i + 1] = lengthRlp[i];
+        }
+        uint256 sizeOffset = lengthRlp.length;
+        assembly {
+            calldatacopy(add(add(result, sizeOffset), 0x21), input.offset, length)
+        }
+        return result;
+    }
+
+    function uintToRlp(uint256 value) internal pure returns (bytes memory result) {
+        // someone go-ethereum's version of RLP encodes zero as empty array because its the same
+        if (value == 0) {
+            result = new bytes(1);
+            result[0] = 0x80;
+            return result;
+        } else if (value <= 0x7f) {
+            result = new bytes(1);
+            result[0] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 8)) {
+            result = new bytes(2);
+            result[0] = 0x81;
+            result[1] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 16)) {
+            result = new bytes(3);
+            result[0] = 0x82;
+            result[1] = bytes1(uint8(value >> 8));
+            result[2] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 24)) {
+            result = new bytes(4);
+            result[0] = 0x83;
+            result[1] = bytes1(uint8(value >> 16));
+            result[2] = bytes1(uint8(value >> 8));
+            result[3] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 32)) {
+            result = new bytes(5);
+            result[0] = 0x84;
+            result[1] = bytes1(uint8(value >> 24));
+            result[2] = bytes1(uint8(value >> 16));
+            result[3] = bytes1(uint8(value >> 8));
+            result[4] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 40)) {
+            result = new bytes(6);
+            result[0] = 0x85;
+            result[1] = bytes1(uint8(value >> 32));
+            result[2] = bytes1(uint8(value >> 24));
+            result[3] = bytes1(uint8(value >> 16));
+            result[4] = bytes1(uint8(value >> 8));
+            result[5] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 48)) {
+            result = new bytes(7);
+            result[0] = 0x86;
+            result[1] = bytes1(uint8(value >> 40));
+            result[2] = bytes1(uint8(value >> 32));
+            result[3] = bytes1(uint8(value >> 24));
+            result[4] = bytes1(uint8(value >> 16));
+            result[5] = bytes1(uint8(value >> 8));
+            result[6] = bytes1(uint8(value));
+            return result;
+        } else if (value < (1 << 56)) {
+            result = new bytes(8);
+            result[0] = 0x87;
+            result[1] = bytes1(uint8(value >> 48));
+            result[2] = bytes1(uint8(value >> 40));
+            result[3] = bytes1(uint8(value >> 32));
+            result[4] = bytes1(uint8(value >> 24));
+            result[5] = bytes1(uint8(value >> 16));
+            result[6] = bytes1(uint8(value >> 8));
+            result[7] = bytes1(uint8(value));
+            return result;
+        } else {
+            result = new bytes(9);
+            result[0] = 0x88;
+            result[1] = bytes1(uint8(value >> 56));
+            result[2] = bytes1(uint8(value >> 48));
+            result[3] = bytes1(uint8(value >> 40));
+            result[4] = bytes1(uint8(value >> 32));
+            result[5] = bytes1(uint8(value >> 24));
+            result[6] = bytes1(uint8(value >> 16));
+            result[7] = bytes1(uint8(value >> 8));
+            result[8] = bytes1(uint8(value));
+            return result;
+        }
+    }
+
     function toUint(uint256 ptr, uint256 len) internal pure returns (uint256) {
         require(len > 0 && len <= 33);
         uint256 offset = _payloadOffset(ptr);
-        uint256 numLen = len - offset;
-
         uint256 result;
         assembly {
             result := calldataload(add(ptr, offset))
-            // cut off redundant bytes
-            result := shr(mul(8, sub(32, numLen)), result)
+        // cut off redundant bytes
+            result := shr(mul(8, sub(32, sub(len, offset))), result)
         }
         return result;
     }
@@ -80,8 +199,6 @@ library RLP {
             assembly {
                 let byteLen := sub(byte0, 0xb7) // # of bytes the actual length is
                 callDataPtr := add(callDataPtr, 1) // skip over the first byte
-
-                /* 32 byte word size */
                 let dataLen := shr(mul(8, sub(32, byteLen)), calldataload(callDataPtr))
                 itemLen := add(dataLen, add(byteLen, 1))
             }
@@ -100,6 +217,20 @@ library RLP {
         }
 
         return itemLen;
+    }
+
+    function prefixLength(uint256 callDataPtr) internal pure returns (uint256) {
+        return _payloadOffset(callDataPtr);
+    }
+
+    function estimatePrefixLength(uint256 byte0) internal pure returns (uint256) {
+        if (byte0 < STRING_SHORT_START)
+            return 0;
+        else if (byte0 < STRING_LONG_START || (byte0 >= LIST_SHORT_START && byte0 < LIST_LONG_START))
+            return 1;
+        else if (byte0 < LIST_SHORT_START)
+            return byte0 - (STRING_LONG_START - 1) + 1;
+        return byte0 - (LIST_LONG_START - 1) + 1;
     }
 
     // @return number of bytes until the data
