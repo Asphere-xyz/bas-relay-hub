@@ -13,7 +13,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
     uint256 internal constant EXTRA_SEAL = 65;
     uint256 internal constant NEXT_FORK_HASHES = 4;
 
-    event DebugUint256(string, bytes32);
+    event DebugUint256(string, uint256);
 
     struct ParliaBlockHeader {
         bytes32 parentHash;
@@ -72,9 +72,9 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         return pbh;
     }
 
-    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external pure returns (bytes memory signingData) {
-        // support of >=64 kB headers might make code much more complicated
-        require(blockProof.length < 65536);
+    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external view returns (bytes memory signingData) {
+        // support of >64 kB headers might make code much more complicated
+        require(blockProof.length <= 65535);
         uint256 it = RLP.openRlp(blockProof);
         uint256 originalLength = RLP.itemLength(it);
         it = RLP.beginIteration(it);
@@ -90,12 +90,20 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         uint256 beforeExtraDataOffset = it;
         it = RLP.next(it);
         uint256 afterExtraDataOffset = it;
-        // remember old and new extra data prefix lengths
+        // create chain id and extra data RLPs
         uint256 oldExtraDataPrefixLength = RLP.prefixLength(beforeExtraDataOffset);
-        uint256 newExtraDataPrefixLength = RLP.estimatePrefixLength(afterExtraDataOffset - beforeExtraDataOffset - oldExtraDataPrefixLength - 65);
-        // form signing data from block proof
+        uint256 newExtraDataPrefixLength = 3;
+        {
+            uint256 newEstExtraDataLength = afterExtraDataOffset - beforeExtraDataOffset - oldExtraDataPrefixLength - 65;
+            if (newEstExtraDataLength < 56) {
+                newExtraDataPrefixLength = 1;
+            } else {
+                newExtraDataPrefixLength = 1 + RLP.uintRlpPrefixLength(newEstExtraDataLength);
+            }
+        }
         bytes memory chainRlp = RLP.uintToRlp(chainId);
-        bytes memory signingData = new bytes(originalLength + newExtraDataPrefixLength - oldExtraDataPrefixLength + chainRlp.length - 65);
+        // form signing data from block proof
+        bytes memory signingData = new bytes(chainRlp.length + originalLength - oldExtraDataPrefixLength + newExtraDataPrefixLength - 65);
         // init first 3 bytes of signing data with RLP prefix and encoded length
         {
             signingData[0] = 0xf9;
@@ -109,35 +117,47 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         }
         // copy block calldata to the signing data before extra data [0;extraData-65)
         assembly {
-            // extraDataLength = afterExtraDataOffset - beforeExtraDataOffset - oldExtraDataPrefixLength + newExtraDataPrefixLength - 65
-//            let extraDataLength := add(sub(sub(sub(afterExtraDataOffset, beforeExtraDataOffset), oldExtraDataPrefixLength), 65), newExtraDataPrefixLength)
-            // copy first bytes before extra data
-            let startAt := add(signingData, add(mload(chainRlp), 0x23))
-            calldatacopy(startAt, add(blockProof.offset, 3), sub(beforeExtraDataOffset, add(blockProof.offset, 3)))
-            // copy extra data but leave some bytes for the prefix
-            startAt := add(add(startAt, sub(beforeExtraDataOffset, add(blockProof.offset, 3))))
-            calldatacopy(startAt, startAt)
-        }
-        // copy extra data
-//        assembly {
-//            let startAt := add(signingData, add(mload(chainRlp), 0x23))
-//            startAt := add(startAt)
-//        }
-        assembly {
-            //let startOffset := add(signingData, add(mload(chainRlp), 0x23))
-            //let lengthWithExtraData := sub(sub(afterExtraDataOffset, 65), add(blockProof.offset, newExtraDataPrefixLength))
-            //calldatacopy(startOffset, add(blockProof.offset, 3), lengthWithExtraData)
-            //calldatacopy(add(startOffset, lengthWithExtraData), afterExtraDataOffset, add(afterExtraDataOffset, 42))
+        // copy first bytes before extra data
+            let dst := add(signingData, add(mload(chainRlp), 0x23)) // 0x20+3 (size of prefix for 64kB list)
+            let src := add(blockProof.offset, 3)
+            let len := sub(beforeExtraDataOffset, src)
+            calldatacopy(dst, src, len)
+        // copy extra data with new prefix
+            dst := add(add(dst, len), newExtraDataPrefixLength)
+            src := add(beforeExtraDataOffset, oldExtraDataPrefixLength)
+            len := sub(sub(sub(afterExtraDataOffset, beforeExtraDataOffset), oldExtraDataPrefixLength), 65)
+            calldatacopy(dst, src, len)
+        // copy rest (mix digest, nonce)
+            dst := add(dst, len)
+            src := afterExtraDataOffset
+            len := 42 // its always 42 bytes
+            calldatacopy(dst, src, len)
         }
         // patch extra data length inside RLP signing data
         {
-            uint256 extraDataLength = RLP.itemLength(beforeExtraDataOffset) - RLP.prefixLength(beforeExtraDataOffset) - 65;
-//            uint256 patchExtraDataAt;
-//            assembly {
-//                patchExtraDataAt := add(sub(beforeExtraDataOffset, blockProof.offset), 2)
-//            }
-//            signingData[patchExtraDataAt + 0] = bytes1(uint8(extraDataLength >> 8));
-//            signingData[patchExtraDataAt + 1] = bytes1(uint8(extraDataLength >> 0));
+            uint256 newExtraDataLength;
+            uint256 patchExtraDataAt;
+            assembly {
+                newExtraDataLength := sub(sub(sub(afterExtraDataOffset, beforeExtraDataOffset), oldExtraDataPrefixLength), 65)
+                patchExtraDataAt := sub(mload(signingData), add(add(newExtraDataLength, newExtraDataPrefixLength), 42))
+            }
+            // we don't need to cover more than 3 cases because we revert if block header >64kB
+            if (newExtraDataPrefixLength == 4) {
+                signingData[patchExtraDataAt + 0] = bytes1(uint8(0xb7 + 3));
+                signingData[patchExtraDataAt + 1] = bytes1(uint8(newExtraDataLength >> 16));
+                signingData[patchExtraDataAt + 2] = bytes1(uint8(newExtraDataLength >> 8));
+                signingData[patchExtraDataAt + 3] = bytes1(uint8(newExtraDataLength >> 0));
+            } else if (newExtraDataPrefixLength == 3) {
+                signingData[patchExtraDataAt + 0] = bytes1(uint8(0xb7 + 2));
+                signingData[patchExtraDataAt + 1] = bytes1(uint8(newExtraDataLength >> 8));
+                signingData[patchExtraDataAt + 2] = bytes1(uint8(newExtraDataLength >> 0));
+            } else if (newExtraDataPrefixLength == 2) {
+                signingData[patchExtraDataAt + 0] = bytes1(uint8(0xb7 + 1));
+                signingData[patchExtraDataAt + 1] = bytes1(uint8(newExtraDataLength >> 8));
+            } else if (newExtraDataLength < 56) {
+                signingData[patchExtraDataAt + 0] = bytes1(uint8(0x80 + newExtraDataLength));
+            }
+            // else can't be here, its unreachable
         }
         return signingData;
     }

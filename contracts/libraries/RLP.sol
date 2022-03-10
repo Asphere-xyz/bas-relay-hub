@@ -57,7 +57,11 @@ library RLP {
         return toUint(ptr, len);
     }
 
-    function bytesToRlp(bytes calldata input, uint256 length) internal pure returns (bytes memory result) {
+    function bytesToRlp(bytes calldata input) internal pure returns (bytes memory result) {
+        uint256 length;
+        assembly {
+            length := input.length
+        }
         if (length < 56) {
             result = new bytes(1 + length);
             assembly {
@@ -158,6 +162,26 @@ library RLP {
         }
     }
 
+    function uintRlpPrefixLength(uint256 value) internal pure returns (uint256 len) {
+        if (value < (1 << 8)) {
+            return 1;
+        } else if (value < (1 << 16)) {
+            return 2;
+        } else if (value < (1 << 24)) {
+            return 3;
+        } else if (value < (1 << 32)) {
+            return 4;
+        } else if (value < (1 << 40)) {
+            return 5;
+        } else if (value < (1 << 48)) {
+            return 6;
+        } else if (value < (1 << 56)) {
+            return 7;
+        } else {
+            return 8;
+        }
+    }
+
     function toUint(uint256 ptr, uint256 len) internal pure returns (uint256) {
         require(len > 0 && len <= 33);
         uint256 offset = _payloadOffset(ptr);
@@ -223,14 +247,13 @@ library RLP {
         return _payloadOffset(callDataPtr);
     }
 
-    function estimatePrefixLength(uint256 byte0) internal pure returns (uint256) {
-        if (byte0 < STRING_SHORT_START)
-            return 0;
-        else if (byte0 < STRING_LONG_START || (byte0 >= LIST_SHORT_START && byte0 < LIST_LONG_START))
+    function estimatePrefixLength(uint256 length) internal pure returns (uint256) {
+        if (length == 0) return 1;
+        if (length == 1) return 1;
+        if (length < 0x38) {
             return 1;
-        else if (byte0 < LIST_SHORT_START)
-            return byte0 - (STRING_LONG_START - 1) + 1;
-        return byte0 - (LIST_LONG_START - 1) + 1;
+        }
+        return 0;
     }
 
     // @return number of bytes until the data
