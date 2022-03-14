@@ -1,14 +1,36 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
 import "../interfaces/IProofVerificationFunction.sol";
 
 import "../libraries/RLP.sol";
-import "../libraries/ParliaParser.sol";
 
 contract ParliaBlockVerifier is IProofVerificationFunction {
 
-    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external pure returns (bytes memory signingData, bytes memory signature) {
+    uint32 internal _confirmationBlocks;
+    uint32 internal _epochInterval;
+
+    constructor(uint32 confirmationBlocks, uint32 epochInterval) {
+        _confirmationBlocks = confirmationBlocks;
+        _epochInterval = epochInterval;
+    }
+
+    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external view returns (VerifiedParliaBlockResult memory result) {
+        return _extractParliaSigningData(blockProof, chainId);
+    }
+
+    struct VerifiedParliaBlockResult {
+        uint64 blockNumber;
+        bytes32 blockHash;
+        bytes signingData;
+        address[] validators;
+        bytes signature;
+        bytes32 parentHash;
+    }
+
+    function _extractParliaSigningData(bytes calldata blockProof, uint256 chainId) internal view returns (VerifiedParliaBlockResult memory result) {
         // support of >64 kB headers might make code much more complicated and such blocks doesn't exist
         require(blockProof.length <= 65535);
         // open RLP and calc block header length after the prefix (it should be block proof length -3)
@@ -21,9 +43,12 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         // + 259 bytes (x1): bloom filter
         // + 21 bytes (x1): coinbase
         // total skip: 33*5+259+21=445
+        result.parentHash = RLP.toBytes32(it);
         it += 445;
         // slow skip for variadic fields: difficulty, number, gas limit, gas used, time
-        it = RLP.next(RLP.next(RLP.next(RLP.next(RLP.next(it)))));
+        it = RLP.next(it);
+        result.blockNumber = uint64(RLP.toUint256(it, RLP.itemLength(it)));
+        it = RLP.next(RLP.next(RLP.next(RLP.next(it))));
         // calculate and remember offsets for extra data begin and end
         uint256 beforeExtraDataOffset = it;
         it = RLP.next(it);
@@ -54,22 +79,24 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             signingData[3 + i] = chainRlp[i];
         }
         // copy block calldata to the signing data before extra data [0;extraData-65)
-        assembly {
-        // copy first bytes before extra data
-            let dst := add(signingData, add(mload(chainRlp), 0x23)) // 0x20+3 (3 is a size of prefix for 64kB list)
-            let src := add(blockProof.offset, 3)
-            let len := sub(beforeExtraDataOffset, src)
-            calldatacopy(dst, src, len)
-        // copy extra data with new prefix
-            dst := add(add(dst, len), newExtraDataPrefixLength)
-            src := add(beforeExtraDataOffset, oldExtraDataPrefixLength)
-            len := sub(sub(sub(afterExtraDataOffset, beforeExtraDataOffset), oldExtraDataPrefixLength), 65)
-            calldatacopy(dst, src, len)
-        // copy rest (mix digest, nonce)
-            dst := add(dst, len)
-            src := afterExtraDataOffset
-            len := 42 // its always 42 bytes
-            calldatacopy(dst, src, len)
+        {
+            assembly {
+            // copy first bytes before extra data
+                let dst := add(signingData, add(mload(chainRlp), 0x23)) // 0x20+3 (3 is a size of prefix for 64kB list)
+                let src := add(blockProof.offset, 3)
+                let len := sub(beforeExtraDataOffset, src)
+                calldatacopy(dst, src, len)
+            // copy extra data with new prefix
+                dst := add(add(dst, len), newExtraDataPrefixLength)
+                src := add(beforeExtraDataOffset, oldExtraDataPrefixLength)
+                len := sub(sub(sub(afterExtraDataOffset, beforeExtraDataOffset), oldExtraDataPrefixLength), 65)
+                calldatacopy(dst, src, len)
+            // copy rest (mix digest, nonce)
+                dst := add(dst, len)
+                src := afterExtraDataOffset
+                len := 42 // its always 42 bytes
+                calldatacopy(dst, src, len)
+            }
         }
         // patch extra data length inside RLP signing data
         {
@@ -97,12 +124,66 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             }
             // else can't be here, its unreachable
         }
+        result.signingData = signingData;
         // save signature
-        signature = new bytes(65);
+        bytes memory signature = new bytes(65);
         assembly {
             calldatacopy(add(signature, 0x20), sub(afterExtraDataOffset, 65), 65)
         }
-        return (signingData, signature);
+        result.signature = signature;
+        // parse validators for zero block epoch
+        if (result.blockNumber % _epochInterval == 0) {
+            uint256 totalValidators = (afterExtraDataOffset - beforeExtraDataOffset + oldExtraDataPrefixLength - 65 - 32) / 20;
+            address[] memory newValidators = new address[](totalValidators);
+            for (uint256 i = 0; i < totalValidators; i++) {
+                uint256 validator;
+                assembly {
+                    validator := calldataload(add(add(add(beforeExtraDataOffset, oldExtraDataPrefixLength), mul(i, 20)), 32))
+                }
+                newValidators[i] = address(uint160(validator >> 96));
+            }
+            result.validators = newValidators;
+        }
+        // calc block hash
+        result.blockHash = keccak256(blockProof);
+        return result;
+    }
+
+    function verifyValidatorTransition(bytes[] calldata proofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (address[] memory newValidatorSet) {
+        bytes32 parentHash;
+        // copy to the stack to avoid SLOADs
+        (uint32 confirmationBlocks, uint32 epochInterval) = (_confirmationBlocks, _epochInterval);
+        // to be sure in correctness of the validator transition we must wait for 12 blocks (21/2+1)
+        require(proofs.length >= confirmationBlocks);
+        // check all blocks
+        for (uint256 i = 0; i < confirmationBlocks; i++) {
+            VerifiedParliaBlockResult memory result = _extractParliaSigningData(proofs[i], chainId);
+            // recover signer from signature
+            if (result.signature[64] == bytes1(uint8(1))) {
+                result.signature[64] = bytes1(uint8(28));
+            } else {
+                result.signature[64] = bytes1(uint8(27));
+            }
+            address signer = ECDSA.recover(keccak256(result.signingData), result.signature);
+            // make sure signer exists (we should know validator order, it can be optimized)
+            bool signerFound = false;
+            for (uint256 j = 0; j < existingValidatorSet.length; j++) {
+                if (existingValidatorSet[j] != signer) continue;
+                signerFound = true;
+                break;
+            }
+            require(signerFound, "unknown signer");
+            // first block must be epoch block
+            if (i == 0) {
+                require(result.blockNumber % epochInterval == 0, "bad epoch block");
+                newValidatorSet = result.validators;
+                parentHash = result.blockHash;
+            } else {
+                require(result.parentHash == parentHash, "bad parent hash");
+                parentHash = result.blockHash;
+            }
+        }
+        return newValidatorSet;
     }
 
     struct ParliaBlockHeader {
@@ -160,9 +241,5 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         // calc block hash
         pbh.blockHash = keccak256(blockProof);
         return pbh;
-    }
-
-    function verifyProof(bytes calldata proof, bytes32[] calldata existingValidatorSet) external pure returns (bytes32[] memory newValidatorSet) {
-        return existingValidatorSet;
     }
 }

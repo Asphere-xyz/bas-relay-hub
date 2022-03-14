@@ -3,5 +3,5 @@ pragma solidity ^0.8.0;
 
 interface IProofVerificationFunction {
 
-    function verifyProof(bytes calldata proof, bytes32[] calldata existingValidatorSet) external pure returns (bytes32[] memory newValidatorSet);
+//    function verifyValidatorTransition(bytes[] calldata proofs, uint256 chainId, bytes32[] calldata existingValidatorSet) external view returns (bytes32[] memory newValidatorSet);
 }

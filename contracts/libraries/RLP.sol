@@ -57,30 +57,6 @@ library RLP {
         return toUint(ptr, len);
     }
 
-    function bytesToRlp(bytes calldata input) internal pure returns (bytes memory result) {
-        uint256 length;
-        assembly {
-            length := input.length
-        }
-        if (length < 56) {
-            result = new bytes(1 + length);
-            assembly {
-                calldatacopy(add(result, 0x21), input.offset, length)
-            }
-            return result;
-        }
-        bytes memory lengthRlp = uintToRlp(length);
-        result = new bytes(1 + length + lengthRlp.length);
-        for (uint256 i = 0; i < lengthRlp.length; i++) {
-            result[i + 1] = lengthRlp[i];
-        }
-        uint256 sizeOffset = lengthRlp.length;
-        assembly {
-            calldatacopy(add(add(result, sizeOffset), 0x21), input.offset, length)
-        }
-        return result;
-    }
-
     function uintToRlp(uint256 value) internal pure returns (bytes memory result) {
         // someone go-ethereum's version of RLP encodes zero as empty array because its the same
         if (value == 0) {
