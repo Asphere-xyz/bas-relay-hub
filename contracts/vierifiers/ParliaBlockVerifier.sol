@@ -9,7 +9,7 @@ import "../libraries/ParliaParser.sol";
 contract ParliaBlockVerifier is IProofVerificationFunction {
 
     function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external pure returns (bytes memory signingData, bytes memory signature) {
-        // support of >64 kB headers might make code much more complicated
+        // support of >64 kB headers might make code much more complicated and such blocks doesn't exist
         require(blockProof.length <= 65535);
         // open RLP and calc block header length after the prefix (it should be block proof length -3)
         uint256 it = RLP.openRlp(blockProof);
@@ -56,7 +56,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         // copy block calldata to the signing data before extra data [0;extraData-65)
         assembly {
         // copy first bytes before extra data
-            let dst := add(signingData, add(mload(chainRlp), 0x23)) // 0x20+3 (size of prefix for 64kB list)
+            let dst := add(signingData, add(mload(chainRlp), 0x23)) // 0x20+3 (3 is a size of prefix for 64kB list)
             let src := add(blockProof.offset, 3)
             let len := sub(beforeExtraDataOffset, src)
             calldatacopy(dst, src, len)
