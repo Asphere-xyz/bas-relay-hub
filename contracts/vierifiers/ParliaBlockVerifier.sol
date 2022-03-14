@@ -8,29 +8,6 @@ import "../libraries/ParliaParser.sol";
 
 contract ParliaBlockVerifier is IProofVerificationFunction {
 
-    uint256 internal constant EXTRA_VANITY = 32;
-    uint256 internal constant ADDRESS_LENGTH = 20;
-    uint256 internal constant EXTRA_SEAL = 65;
-    uint256 internal constant NEXT_FORK_HASHES = 4;
-
-    event DebugUint256(string, uint256);
-
-    struct ParliaBlockHeader {
-        bytes32 parentHash;
-        bytes32 uncleHash;
-        address coinbase;
-        bytes32 stateRoot;
-        bytes32 txRoot;
-        bytes32 receiptRoot;
-        uint64 blockNumber;
-        uint64 gasLimit;
-        uint64 gasUsed;
-        uint64 blockTime;
-        bytes32 mixDigest;
-        uint64 nonce;
-        bytes32 blockHash;
-    }
-
     function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external pure returns (bytes memory signingData, bytes memory signature) {
         // support of >64 kB headers might make code much more complicated
         require(blockProof.length <= 65535);
@@ -53,7 +30,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         uint256 afterExtraDataOffset = it;
         // create chain id and extra data RLPs
         uint256 oldExtraDataPrefixLength = RLP.prefixLength(beforeExtraDataOffset);
-        uint256 newExtraDataPrefixLength = 3;
+        uint256 newExtraDataPrefixLength;
         {
             uint256 newEstExtraDataLength = afterExtraDataOffset - beforeExtraDataOffset - oldExtraDataPrefixLength - 65;
             if (newEstExtraDataLength < 56) {
@@ -126,6 +103,22 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             calldatacopy(add(signature, 0x20), sub(afterExtraDataOffset, 65), 65)
         }
         return (signingData, signature);
+    }
+
+    struct ParliaBlockHeader {
+        bytes32 parentHash;
+        bytes32 uncleHash;
+        address coinbase;
+        bytes32 stateRoot;
+        bytes32 txRoot;
+        bytes32 receiptRoot;
+        uint64 blockNumber;
+        uint64 gasLimit;
+        uint64 gasUsed;
+        uint64 blockTime;
+        bytes32 mixDigest;
+        uint64 nonce;
+        bytes32 blockHash;
     }
 
     function parseParliaBlockHeader(bytes calldata blockProof) external pure returns (ParliaBlockHeader memory pbh) {
