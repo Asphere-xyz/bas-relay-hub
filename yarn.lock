@@ -212,6 +212,11 @@
     lodash "^4.17.19"
     to-fast-properties "^2.0.0"
 
+"@chainsafe/chainbridge-contracts@^2.0.0":
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/@chainsafe/chainbridge-contracts/-/chainbridge-contracts-2.0.0.tgz#9fbc17876915ed062af74ebb45fb4d0415e3ce52"
+  integrity sha512-bo6Lusr3KBjHpQ5k+Tq7u7Dfox9VOapN+ih4MBhIZ4JGf7bICFsByKXXSFzMsOv2aq0VlmorsTGAaWmMdGprdg==
+
 "@consento/sync-randombytes@^1.0.4", "@consento/sync-randombytes@^1.0.5":
   version "1.0.5"
   resolved "https://registry.yarnpkg.com/@consento/sync-randombytes/-/sync-randombytes-1.0.5.tgz#5be6bc58c6a6fa6e09f04cc684d037e29e6c28d5"

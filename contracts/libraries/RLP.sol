@@ -58,12 +58,14 @@ library RLP {
     }
 
     function uintToRlp(uint256 value) internal pure returns (bytes memory result) {
-        // someone go-ethereum's version of RLP encodes zero as empty array because its the same
+        // zero can be encoded as zero or empty array, go-ethereum's encodes as empty array
         if (value == 0) {
             result = new bytes(1);
             result[0] = 0x80;
             return result;
-        } else if (value <= 0x7f) {
+        }
+        // encode value
+        if (value <= 0x7f) {
             result = new bytes(1);
             result[0] = bytes1(uint8(value));
             return result;
