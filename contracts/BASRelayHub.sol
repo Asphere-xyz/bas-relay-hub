@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
 import "./interfaces/IProofVerificationFunction.sol";
 import "./interfaces/IBASRelayHub.sol";
 
-import "./libraries/MathUtils.sol";
+import "./libraries/BitUtils.sol";
 
 contract BASRelayHub is IBASRelayHub {
 
@@ -38,9 +40,10 @@ contract BASRelayHub is IBASRelayHub {
 
     // default verification function for certified chains
     IProofVerificationFunction internal _defaultVerificationFunction;
+    address internal _checkpointOracle;
     // mapping with all registered chains
-    mapping(uint256 => BAS) internal _registeredChains;
     mapping(uint256 => ValidatorHistory) _validatorHistories;
+    mapping(uint256 => BAS) internal _registeredChains;
 
     constructor(IProofVerificationFunction defaultVerificationFunction) {
         _defaultVerificationFunction = defaultVerificationFunction;
@@ -50,11 +53,16 @@ contract BASRelayHub is IBASRelayHub {
         _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock);
     }
 
+//    function registerUsingCheckpoint(uint256 chainId, bytes calldata checkpointBlock, bytes32 checkpointHash, bytes calldata checkpointSignature) external {
+//        require(ECDSA.recover(checkpointHash, checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
+//    }
+
     function _verificationFunction(IProofVerificationFunction verificationFunction) internal view returns (IProofVerificationFunction) {
         if (verificationFunction == DEFAULT_VERIFICATION_FUNCTION) {
-            verificationFunction = _defaultVerificationFunction;
+            return _defaultVerificationFunction;
+        } else {
+            return verificationFunction;
         }
-        return verificationFunction;
     }
 
     function registerBAS(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata genesisBlock) external {
@@ -63,18 +71,18 @@ contract BASRelayHub is IBASRelayHub {
 
     function _registerChainWithVerificationFunction(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata genesisBlock) internal {
         BAS memory bas = _registeredChains[chainId];
-        require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "BASRelayHub: already registered");
+        require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
         address[] memory initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(genesisBlock, chainId);
         bas.chainStatus = ChainStatus.Verifying;
         bas.verificationFunction = verificationFunction;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        _initValidatorBitMap(validatorHistory, initialValidatorSet, 0);
+        _updateActiveValidatorSet(validatorHistory, initialValidatorSet, 0);
         _registeredChains[chainId] = bas;
         emit ChainRegistered(chainId);
         emit ValidatorSetUpdated(chainId, initialValidatorSet);
     }
 
-    function _initValidatorBitMap(ValidatorHistory storage validatorHistory, address[] memory validatorsList, uint64 atEpoch) internal {
+    function _updateActiveValidatorSet(ValidatorHistory storage validatorHistory, address[] memory validatorsList, uint64 atEpoch) internal {
         uint256[] memory buckets = new uint256[]((validatorHistory.allValidators.length() >> 8) + 1);
         // build set of buckets with new bits
         for (uint256 i = 0; i < validatorsList.length; i++) {
@@ -103,12 +111,12 @@ contract BASRelayHub is IBASRelayHub {
         uint256 validatorsLength = validatorHistory.allValidators.length();
         uint256 totalBuckets = (validatorsLength >> 8) + 1;
         address[] memory activeValidators = new address[](validatorsLength);
-        BitMaps.BitMap storage currentBitmap = validatorHistory.activeValidators[atEpoch];
+        BitMaps.BitMap storage bitmap = validatorHistory.activeValidators[atEpoch];
         uint256 j = 0;
         for (uint256 i = 0; i < totalBuckets; i++) {
-            uint256 bucket = currentBitmap._data[i];
+            uint256 bucket = bitmap._data[i];
             while (bucket != 0) {
-                uint256 zeroes = MathUtils.ctz(bucket);
+                uint256 zeroes = BitUtils.ctz(bucket);
                 bucket ^= (1 << zeroes);
                 activeValidators[j] = address(uint160(uint256(bytes32(validatorHistory.allValidators._inner._values[(i << 8) + zeroes]))));
                 j++;
@@ -120,14 +128,25 @@ contract BASRelayHub is IBASRelayHub {
         return activeValidators;
     }
 
+    function checkValidators(uint256 chainId, address[] memory validators, uint64 epoch) external view returns (uint64 uniqueValidators) {
+        ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
+        BitMaps.BitMap storage activeValidators = validatorHistory.activeValidators[epoch];
+        for (uint256 i = 0; i < validators.length; i++) {
+            uint256 index = validatorHistory.allValidators._inner._indexes[bytes32(uint256(uint160(validators[i])))] - 1;
+            require(activeValidators.get(index), "not a validator");
+            uniqueValidators++;
+        }
+        return uniqueValidators;
+    }
+
     function updateValidatorSet(uint256 chainId, bytes[] calldata blockProofs) external {
         BAS memory bas = _registeredChains[chainId];
-        require(bas.chainStatus == ChainStatus.Verifying || bas.chainStatus == ChainStatus.Active, "BASRelayHub: not active");
+        require(bas.chainStatus == ChainStatus.Verifying || bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         (address[] memory newValidatorSet, uint64 epochNumber) = _verificationFunction(bas.verificationFunction).verifyValidatorTransition(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
         require(epochNumber == validatorHistory.latestKnownEpoch + 1, "BASRelayHub: bad epoch");
         bas.chainStatus = ChainStatus.Active;
-        _initValidatorBitMap(validatorHistory, newValidatorSet, epochNumber);
+        _updateActiveValidatorSet(validatorHistory, newValidatorSet, epochNumber);
         _registeredChains[chainId] = bas;
         emit ValidatorSetUpdated(chainId, newValidatorSet);
     }

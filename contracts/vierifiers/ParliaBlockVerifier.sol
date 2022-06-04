@@ -150,14 +150,15 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         return result;
     }
 
-    function _ensureValidatorsAreSorted(VerifiedParliaBlockResult memory result) internal pure {
-        require(result.validators.length > 0, "ParliaBlockVerified: no validators");
-
+    function verifyCheckpointBlock(bytes calldata genesisBlock, uint256 chainId, bytes32 checkpointHash) external view override returns (address[] memory initialValidatorSet) {
+        VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId);
+        require(result.blockHash == checkpointHash, "not a checkpoint block");
+        return result.validators;
     }
 
-    function verifyGenesisBlock(bytes calldata genesisBlock, uint256 chainId) external view returns (address[] memory initialValidatorSet) {
+    function verifyGenesisBlock(bytes calldata genesisBlock, uint256 chainId) external view override returns (address[] memory initialValidatorSet) {
         VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId);
-        require(result.blockNumber == 0, "ParliaBlockVerifier: not a genesis block");
+        require(result.blockNumber == 0, "not a genesis block");
         return result.validators;
     }
 
@@ -165,8 +166,10 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         bytes32 parentHash;
         // copy to the stack to avoid SLOAD's
         (uint32 confirmationBlocks, uint32 epochInterval) = (_confirmationBlocks, _epochInterval);
-        // to be sure in correctness of the validator transition we must wait for 12 blocks (21/2+1)
-        require(blockProofs.length >= confirmationBlocks);
+        require(blockProofs.length >= confirmationBlocks, "make sure proofs are enough");
+        // we must store somehow set of active validators to check is quorum reached
+        address[] memory uniqueValidators = new address[](blockProofs.length);
+        uint64 uniqueValidatorsLength = 0;
         // check all blocks
         for (uint256 i = 0; i < confirmationBlocks; i++) {
             VerifiedParliaBlockResult memory result = _extractParliaSigningData(blockProofs[i], chainId);
@@ -185,17 +188,28 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
                 break;
             }
             require(signerFound, "unknown signer");
+            bool uniqueFound = false;
+            for (uint256 j = 0; j < uniqueValidatorsLength; j++) {
+                if (uniqueValidators[j] != signer) continue;
+                uniqueFound = true;
+                break;
+            }
+            if (!uniqueFound) {
+                uniqueValidators[uniqueValidatorsLength] = signer;
+                uniqueValidatorsLength++;
+            }
             // first block must be epoch block
             if (i == 0) {
-                require(result.blockNumber % epochInterval == 0, "ParliaBlockVerifier: bad epoch block");
+                require(result.blockNumber % epochInterval == 0, "epoch block");
                 epochNumber = result.blockNumber / epochInterval;
                 newValidatorSet = result.validators;
                 parentHash = result.blockHash;
             } else {
-                require(result.parentHash == parentHash, "ParliaBlockVerifier: bad parent hash");
+                require(result.parentHash == parentHash, "bad parent hash");
                 parentHash = result.blockHash;
             }
         }
+        require(uniqueValidatorsLength >= confirmationBlocks, "quorum not reached");
         return (newValidatorSet, epochNumber);
     }
 

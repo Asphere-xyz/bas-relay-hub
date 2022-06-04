@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.6;
 
-library MathUtils {
+library BitUtils {
 
     function ctz(uint256 _num) internal pure returns (uint256) {
         if (_num == 0) return 256;
