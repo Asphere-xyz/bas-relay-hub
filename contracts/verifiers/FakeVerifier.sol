@@ -3,8 +3,8 @@ pragma solidity ^0.8.0;
 
 import "../interfaces/IProofVerificationFunction.sol";
 
-//contract FakeVerifier is IProofVerificationFunction {
-//
+contract FakeVerifier {
+
 //    function verifyGenesisBlock(bytes calldata /*genesisBlock*/, uint256 /*chainId*/) external pure returns (address[] memory initialValidatorSet) {
 //        return initialValidatorSet;
 //    }
@@ -12,4 +12,4 @@ import "../interfaces/IProofVerificationFunction.sol";
 //    function verifyValidatorTransition(bytes[] calldata /*blockProofs*/, uint256 /*chainId*/, address[] calldata existingValidatorSet) external pure returns (address[] memory newValidatorSet) {
 //        return existingValidatorSet;
 //    }
-//}
+}

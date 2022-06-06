@@ -1,43 +1,42 @@
-const HDWalletProvider = require('@truffle/hdwallet-provider');
+const ENABLE_GAS_REPORTER = false;
+
+let mochaOptions = {enableTimeouts: false}
+if (Boolean(ENABLE_GAS_REPORTER)) {
+  Object.assign(mochaOptions, {
+    reporterOptions: {
+      showTimeSpent: true,
+      showMethodSig: true
+    },
+    reporter: 'eth-gas-reporter'
+  })
+}
 
 module.exports = {
   compilers: {
     solc: {
-      version: "0.8.11",
+      version: "0.8.14",
       settings: {
         optimizer: {
           enabled: true,
-          runs: 200
-        },
+          runs: 20
+        }
       }
     }
   },
   networks: {
-    ganache: {
-      provider: () => new HDWalletProvider({
-        mnemonic: 'inherit daring trust actual engine pair swap cargo subject lawsuit length hurt',
-        providerOrUrl: "http://127.0.0.1:7545",
-        chainId: 5777,
-      }),
-      network_id: 5777,
-      confirmations: 1,
-      // gasPrice: 20_000000000,
-      // gas: 30_000_000,
-      timeoutBlocks: 50,
-      skipDryRun: true,
-      networkCheckTimeout: 10_000_000,
-      websockets: true
+    develop: {
+      host: "localhost",
+      port: 8545,
+      network_id: "*"
     },
-
+    ganache: {
+      host: "localhost",
+      port: 7545,
+      network_id: "*",
+      gas: 100_000_000
+    }
   },
-  mocha: {
-    enableTimeouts: false,
-    // reporterOptions: {
-    //   showTimeSpent: true,
-    //   showMethodSig: true,
-    // },
-    // reporter: 'eth-gas-reporter'
-  },
+  mocha: mochaOptions,
   plugins: [
     "solidity-coverage"
   ]
