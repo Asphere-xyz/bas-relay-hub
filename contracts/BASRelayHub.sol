@@ -11,11 +11,12 @@ import "./libraries/BitUtils.sol";
 contract BASRelayHub is IBASRelayHub {
 
     IProofVerificationFunction internal constant DEFAULT_VERIFICATION_FUNCTION = IProofVerificationFunction(0x0000000000000000000000000000000000000000);
+    bytes32 internal constant ZERO_BLOCK_HASH = bytes32(0x00);
 
     using EnumerableSet for EnumerableSet.AddressSet;
     using BitMaps for BitMaps.BitMap;
 
-    event ChainRegistered(uint256 indexed chainId);
+    event ChainRegistered(uint256 indexed chainId, address[] initValidatorSet);
     event ValidatorSetUpdated(uint256 indexed chainId, address[] newValidatorSet);
 
     struct ValidatorHistory {
@@ -50,12 +51,13 @@ contract BASRelayHub is IBASRelayHub {
     }
 
     function registerCertifiedBAS(uint256 chainId, bytes calldata genesisBlock) external {
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock);
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH);
     }
 
-//    function registerUsingCheckpoint(uint256 chainId, bytes calldata checkpointBlock, bytes32 checkpointHash, bytes calldata checkpointSignature) external {
-//        require(ECDSA.recover(checkpointHash, checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
-//    }
+    function registerUsingCheckpoint(uint256 chainId, bytes calldata checkpointBlock, bytes32 checkpointHash, bytes calldata checkpointSignature) external {
+        require(ECDSA.recover(keccak256(abi.encode(chainId, checkpointHash)), checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash);
+    }
 
     function _verificationFunction(IProofVerificationFunction verificationFunction) internal view returns (IProofVerificationFunction) {
         if (verificationFunction == DEFAULT_VERIFICATION_FUNCTION) {
@@ -66,20 +68,24 @@ contract BASRelayHub is IBASRelayHub {
     }
 
     function registerBAS(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata genesisBlock) external {
-        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock);
+        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH);
     }
 
-    function _registerChainWithVerificationFunction(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata genesisBlock) internal {
+    function _registerChainWithVerificationFunction(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata blockProof, bytes32 checkpointHash) internal {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
-        address[] memory initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(genesisBlock, chainId);
+        address[] memory initialValidatorSet;
+        if (checkpointHash == ZERO_BLOCK_HASH) {
+            initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(blockProof, chainId);
+        } else {
+            initialValidatorSet = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash);
+        }
         bas.chainStatus = ChainStatus.Verifying;
         bas.verificationFunction = verificationFunction;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         _updateActiveValidatorSet(validatorHistory, initialValidatorSet, 0);
         _registeredChains[chainId] = bas;
-        emit ChainRegistered(chainId);
-        emit ValidatorSetUpdated(chainId, initialValidatorSet);
+        emit ChainRegistered(chainId, initialValidatorSet);
     }
 
     function _updateActiveValidatorSet(ValidatorHistory storage validatorHistory, address[] memory validatorsList, uint64 atEpoch) internal {
