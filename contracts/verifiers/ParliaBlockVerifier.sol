@@ -25,15 +25,16 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
     }
 
     struct VerifiedParliaBlockResult {
-        uint64 blockNumber;
         bytes32 blockHash;
-        bytes signingData;
+        uint64 blockNumber;
+        address coinbase;
         address[] validators;
-        bytes signature;
         bytes32 parentHash;
+        bytes signingData;
+        bytes signature;
     }
 
-    function _extractParliaSigningData(bytes calldata blockProof, uint256 chainId) internal view returns (VerifiedParliaBlockResult memory result) {
+    function _extractParliaSigningData(bytes calldata blockProof, uint256 chainId) internal virtual view returns (VerifiedParliaBlockResult memory result) {
         // support of >64 kB headers might make code much more complicated and such blocks doesn't exist
         require(blockProof.length <= 65535);
         // open RLP and calc block header length after the prefix (it should be block proof length -3)
@@ -125,13 +126,22 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             }
             // else can't be here, its unreachable
         }
-        result.signingData = signingData;
         // save signature
         bytes memory signature = new bytes(65);
         assembly {
             calldatacopy(add(signature, 0x20), sub(afterExtraDataOffset, 65), 65)
         }
-        result.signature = signature;
+        // recover signer from signature (genesis block doesn't have signature)
+        if (result.blockNumber != 0) {
+            if (signature[64] == bytes1(uint8(1))) {
+                signature[64] = bytes1(uint8(28));
+            } else {
+                signature[64] = bytes1(uint8(27));
+            }
+            result.signingData = signingData;
+            result.signature = signature;
+            result.coinbase = ECDSA.recover(keccak256(signingData), signature);
+        }
         // parse validators for zero block epoch
         if (result.blockNumber % _epochInterval == 0) {
             uint256 totalValidators = (afterExtraDataOffset - beforeExtraDataOffset + oldExtraDataPrefixLength - 65 - 32) / 20;
@@ -173,13 +183,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         // check all blocks
         for (uint256 i = 0; i < confirmationBlocks; i++) {
             VerifiedParliaBlockResult memory result = _extractParliaSigningData(blockProofs[i], chainId);
-            // recover signer from signature
-            if (result.signature[64] == bytes1(uint8(1))) {
-                result.signature[64] = bytes1(uint8(28));
-            } else {
-                result.signature[64] = bytes1(uint8(27));
-            }
-            address signer = ECDSA.recover(keccak256(result.signingData), result.signature);
+            address signer = result.coinbase;
             // make sure signer exists (we should know validator order, it can be optimized)
             bool signerFound = false;
             for (uint256 j = 0; j < existingValidatorSet.length; j++) {
