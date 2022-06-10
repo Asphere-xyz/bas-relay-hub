@@ -7,6 +7,7 @@ import "./interfaces/IProofVerificationFunction.sol";
 import "./interfaces/IBASRelayHub.sol";
 
 import "./libraries/BitUtils.sol";
+import "./libraries/MerklePatriciaProof.sol";
 
 contract BASRelayHub is IBASRelayHub {
 
@@ -155,5 +156,13 @@ contract BASRelayHub is IBASRelayHub {
         _updateActiveValidatorSet(validatorHistory, newValidatorSet, epochNumber);
         _registeredChains[chainId] = bas;
         emit ValidatorSetUpdated(chainId, newValidatorSet);
+    }
+
+    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes memory siblings) external view {
+        BAS memory bas = _registeredChains[chainId];
+        require(bas.chainStatus == ChainStatus.Active, "not active");
+        ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
+        IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
+        require(MerklePatriciaProof.verify(rawReceipt, path, siblings, verifiedBlock.receiptRoot), "incorrect proof");
     }
 }

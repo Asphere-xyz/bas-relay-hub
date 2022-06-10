@@ -17,12 +17,14 @@
     "@truffle/hdwallet-provider": "^1.2.6",
     "bignumber.js": "^9.0.2",
     "eth-gas-reporter": "^0.2.25",
-    "ethereumjs-util": "^7.1.3",
+    "ethereumjs-util": "^7.1.5",
     "rlp": "^2.2.6",
     "solidity-coverage": "^0.7.18",
     "truffle": "^5.4.32",
     "web3": "^1.3.4",
     "web3-utils": "^1.7.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "merkle-patricia-tree": "^4.2.4"
+  }
 }

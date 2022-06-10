@@ -10,4 +10,15 @@ interface IProofVerificationFunction is IValidatorSet {
     function verifyGenesisBlock(bytes calldata genesisBlock, uint256 chainId) external view returns (address[] memory initialValidatorSet);
 
     function verifyValidatorTransition(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (address[] memory newValidatorSet, uint64 epochNumber);
+
+    struct VerifiedBlock {
+        bytes32 blockHash;
+        bytes32 parentHash;
+        uint64 blockNumber;
+        bytes32 stateRoot;
+        bytes32 txRoot;
+        bytes32 receiptRoot;
+    }
+
+    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory);
 }

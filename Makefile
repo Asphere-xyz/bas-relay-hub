@@ -4,11 +4,7 @@ install:
 
 .PHONY: compile
 compile:
-	yarn compile && node build-abi.js
-
-.PHONY: create-genesis
-create-genesis:
-	go run ./create-genesis.go
+	yarn compile && node ./scripts/build-abi.js
 
 .PHONY: all
-all: install compile create-genesis
+all: install compile
