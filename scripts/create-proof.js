@@ -14,16 +14,15 @@ const sendJsonRpcRequest = async (web3, data) => {
 }
 
 const isTypedReceipt = (receipt) => {
+  if (!receipt.type) return false;
   const hexType = typeof receipt.type === 'number' ? numberToHex(receipt.type) : receipt.type;
   return receipt.status != null && hexType !== "0x0" && hexType !== "0x";
 }
 
 const getReceiptBytes = (receipt) => {
   let encodedData = rlp.encode([
-    toBuffer(
-      receipt.status !== undefined && receipt.status != null ? (receipt.status ? '0x1' : '0x') : receipt.root
-    ),
-    toBuffer(receipt.cumulativeGasUsed),
+    toBuffer(hexToNumber(receipt.status)),
+    toBuffer(hexToNumber(receipt.cumulativeGasUsed)),
     toBuffer(receipt.logsBloom),
     // encoded log array
     receipt.logs.map(l => {
@@ -50,32 +49,51 @@ const main = async () => {
   console.log(`State Root: ${block.stateRoot}`);
   console.log(`Transactions Root: ${block.transactionsRoot}`);
 
-  const receipts = await sendJsonRpcRequest(web3, {
+  let receipts = await sendJsonRpcRequest(web3, {
     jsonrpc: '2.0',
     method: 'eth_getTransactionReceiptsByBlockNumber',
     params: [numberToHex(block.number)],
     id: 1,
   })
-  const receiptWithBurn = receipts[receipts.length - 1];
+  receipts = receipts.map(r => {
+    if (!r.type) r.type = 0
+    return r
+  })
+  const receiptWithBurn = receipts[receipts.length - 1],
+    receiptWithBurnKey = rlp.encode(hexToNumber(receiptWithBurn.transactionIndex));
 
+  // build receipt trie
   const trie = new BaseTrie();
   for (const receipt of receipts) {
     const path = rlp.encode(hexToNumber(receipt.transactionIndex)),
       data = getReceiptBytes(receipt);
     await trie.put(path, data)
   }
-  const foundPath = await trie.findPath(rlp.encode(hexToNumber(receiptWithBurn.transactionIndex)), true)
+  const foundPath = await trie.findPath(receiptWithBurnKey, true)
   if (foundPath.remaining > 0) {
     throw new Error(`Can't find node in the trie`)
   }
+  if (trie.root.toString('hex') !== block.receiptsRoot.substr(2)) {
+    throw new Error(`Incorrect receipts root: ${trie.root.toString('hex')} != ${block.receiptsRoot.substr(2)}`)
+  }
+
+  // create proof
   const proof = {
     blockHash: receiptWithBurn.blockHash,
-    parentNodes: rlp.encode(foundPath.stack.map(s => s.raw())).toString('hex'),
-    root: block.receiptsRoot,
-    path: rlp.encode(receiptWithBurn.transactionIndex).toString('hex'),
-    value: isTypedReceipt(receiptWithBurn) ? foundPath.node.value.toString('hex') : rlp.decode(foundPath.node.value).toString('hex')
+    parentNodes: '0x' + rlp.encode(foundPath.stack.map(s => s.raw())).toString('hex'),
+    root: '0x' + trie.root.toString('hex'),
+    path: '0x' + Buffer.concat([Buffer.from('00', 'hex'), receiptWithBurnKey]).toString('hex'),
   };
+  if (isTypedReceipt(receiptWithBurn)) {
+    proof.value = '0x' + foundPath.node.value.toString('hex');
+  } else {
+    proof.value = '0x' + foundPath.node.value.toString('hex');
+  }
+
   console.log(JSON.stringify(proof, null, 2));
+  console.log();
+  console.log('-----------------------------');
+  console.log();
 };
 
 (async () => {

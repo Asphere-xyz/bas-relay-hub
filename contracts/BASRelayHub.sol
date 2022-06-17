@@ -151,18 +151,18 @@ contract BASRelayHub is IBASRelayHub {
         require(bas.chainStatus == ChainStatus.Verifying || bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         (address[] memory newValidatorSet, uint64 epochNumber) = _verificationFunction(bas.verificationFunction).verifyValidatorTransition(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
-        require(epochNumber == validatorHistory.latestKnownEpoch + 1, "BASRelayHub: bad epoch");
+        require(epochNumber == validatorHistory.latestKnownEpoch + 1, "bad epoch");
         bas.chainStatus = ChainStatus.Active;
         _updateActiveValidatorSet(validatorHistory, newValidatorSet, epochNumber);
         _registeredChains[chainId] = bas;
         emit ValidatorSetUpdated(chainId, newValidatorSet);
     }
 
-    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes memory siblings) external view {
+    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external view {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
-        require(MerklePatriciaProof.verify(rawReceipt, path, siblings, verifiedBlock.receiptRoot), "incorrect proof");
+        require(MerklePatriciaProof.verify(keccak256(rawReceipt), path, siblings, verifiedBlock.receiptRoot), "bad proof");
     }
 }

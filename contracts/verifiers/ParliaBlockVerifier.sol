@@ -176,7 +176,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         bytes32 parentHash;
         // copy to the stack to avoid SLOAD's
         (uint32 confirmationBlocks, uint32 epochInterval) = (_confirmationBlocks, _epochInterval);
-        require(blockProofs.length >= confirmationBlocks, "make sure proofs are enough");
+        require(blockProofs.length >= confirmationBlocks, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached
         address[] memory uniqueValidators = new address[](blockProofs.length);
         uint64 uniqueValidatorsLength = 0;

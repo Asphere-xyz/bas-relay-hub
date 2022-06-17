@@ -53,6 +53,37 @@ library RLP {
         return bytes32(toUint(ptr, 33));
     }
 
+    function toRlpBytes(uint256 ptr) internal pure returns (bytes memory) {
+        uint256 length = itemLength(ptr);
+        bytes memory result = new bytes(length);
+        if (result.length == 0) {
+            return result;
+        }
+        ptr = beginIteration(ptr);
+        assembly {
+            calldatacopy(add(0x20, result), ptr, length)
+        }
+        return result;
+    }
+
+    function toRlpBytesKeccak256(uint256 ptr) internal pure returns (bytes32) {
+        return keccak256(toRlpBytes(ptr));
+    }
+    
+    function toBytes(uint256 ptr) internal pure returns (bytes memory) {
+        uint256 offset = _payloadOffset(ptr);
+        uint256 length = itemLength(ptr) - offset;
+        bytes memory result = new bytes(length);
+        if (result.length == 0) {
+            return result;
+        }
+        ptr = beginIteration(ptr);
+        assembly {
+            calldatacopy(add(0x20, result), add(ptr, offset), length)
+        }
+        return result;
+    }
+
     function toUint256(uint256 ptr, uint256 len) internal pure returns (uint256) {
         return toUint(ptr, len);
     }
@@ -186,11 +217,11 @@ library RLP {
     }
 
     // @return entire rlp item byte length
-    function itemLength(uint callDataPtr) internal pure returns (uint256) {
+    function itemLength(uint ptr) internal pure returns (uint256) {
         uint256 itemLen;
         uint256 byte0;
         assembly {
-            byte0 := byte(0, calldataload(callDataPtr))
+            byte0 := byte(0, calldataload(ptr))
         }
 
         if (byte0 < STRING_SHORT_START)
@@ -200,8 +231,8 @@ library RLP {
         else if (byte0 < LIST_SHORT_START) {
             assembly {
                 let byteLen := sub(byte0, 0xb7) // # of bytes the actual length is
-                callDataPtr := add(callDataPtr, 1) // skip over the first byte
-                let dataLen := shr(mul(8, sub(32, byteLen)), calldataload(callDataPtr))
+                ptr := add(ptr, 1) // skip over the first byte
+                let dataLen := shr(mul(8, sub(32, byteLen)), calldataload(ptr))
                 itemLen := add(dataLen, add(byteLen, 1))
             }
         }
@@ -211,9 +242,9 @@ library RLP {
         else {
             assembly {
                 let byteLen := sub(byte0, 0xf7)
-                callDataPtr := add(callDataPtr, 1)
+                ptr := add(ptr, 1)
 
-                let dataLen := shr(mul(8, sub(32, byteLen)), calldataload(callDataPtr))
+                let dataLen := shr(mul(8, sub(32, byteLen)), calldataload(ptr))
                 itemLen := add(dataLen, add(byteLen, 1))
             }
         }
@@ -221,8 +252,8 @@ library RLP {
         return itemLen;
     }
 
-    function prefixLength(uint256 callDataPtr) internal pure returns (uint256) {
-        return _payloadOffset(callDataPtr);
+    function prefixLength(uint256 ptr) internal pure returns (uint256) {
+        return _payloadOffset(ptr);
     }
 
     function estimatePrefixLength(uint256 length) internal pure returns (uint256) {
@@ -235,10 +266,10 @@ library RLP {
     }
 
     // @return number of bytes until the data
-    function _payloadOffset(uint256 callDataPtr) private pure returns (uint256) {
+    function _payloadOffset(uint256 ptr) private pure returns (uint256) {
         uint256 byte0;
         assembly {
-            byte0 := byte(0, calldataload(callDataPtr))
+            byte0 := byte(0, calldataload(ptr))
         }
 
         if (byte0 < STRING_SHORT_START)
