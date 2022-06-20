@@ -58,7 +58,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
         if (token == _nativeTokenMetadata.origin) {
             return (0, address(0x0));
         }
-        try IERC20Pegged(token).getOrigin() returns (uint256 chain, address origin) {
+        try IERC20PeggedToken(token).getOrigin() returns (uint256 chain, address origin) {
             return (chain, origin);
         } catch {}
         return (0, address(0x0));
@@ -135,8 +135,8 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
         address toToken = _peggedDestinationErc20Token(fromToken, origin, toChain, chain);
         IERC20Mintable(fromToken).burn(fromAddress, amt);
         Metadata memory metaData = Metadata(
-            Utils.stringToBytes32(IERC20Extra(fromToken).symbol()),
-            Utils.stringToBytes32(IERC20Extra(fromToken).name()),
+            Utils.stringToBytes32(IERC20Metadata(fromToken).symbol()),
+            Utils.stringToBytes32(IERC20Metadata(fromToken).name()),
             chain,
             origin
         );
@@ -183,8 +183,8 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
         uint256 amt = _amountErc20Token(fromToken, totalAmount);
         address toToken = _bridgeRouter.peggedTokenAddress(address(toBridge), fromToken);
         Metadata memory metaData = Metadata(
-            Utils.stringToBytes32(IERC20Extra(fromToken).symbol()),
-            Utils.stringToBytes32(IERC20Extra(fromToken).name()),
+            Utils.stringToBytes32(IERC20Metadata(fromToken).symbol()),
+            Utils.stringToBytes32(IERC20Metadata(fromToken).name()),
             block.chainid,
             fromToken
         );
@@ -214,8 +214,8 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
 
     function _amountErc20Token(address fromToken, uint256 totalAmount) internal returns (uint256) {
         /* lets pack ERC20 token meta data and scale amount to 18 decimals */
-        require(IERC20Extra(fromToken).decimals() <= 18, "decimals overflow");
-        totalAmount *= (10 ** (18 - IERC20Extra(fromToken).decimals()));
+        require(IERC20Metadata(fromToken).decimals() <= 18, "decimals overflow");
+        totalAmount *= (10 ** (18 - IERC20Metadata(fromToken).decimals()));
         return totalAmount;
     }
 
@@ -299,7 +299,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
 
     function _withdrawErc20(EthereumVerifier.State memory state) internal {
         /* we need to rescale this amount */
-        uint8 decimals = IERC20Extra(state.toToken).decimals();
+        uint8 decimals = IERC20Metadata(state.toToken).decimals();
         require(decimals <= 18, "decimals overflow");
         uint256 scaledAmount = state.totalAmount / (10 ** (18 - decimals));
         /* transfer tokens and make sure behaviour is correct (just in case) */

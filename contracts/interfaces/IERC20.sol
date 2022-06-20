@@ -2,31 +2,16 @@
 pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-interface IERC20Mintable {
+interface IERC20PeggedToken {
+
+    function getOrigin() external view returns (uint256, address);
 
     function mint(address account, uint256 amount) external;
 
     function burn(address account, uint256 amount) external;
 }
 
-interface IERC20Pegged {
-
-    function getOrigin() external view returns (uint256, address);
-}
-
-interface IERC20Extra {
-
-    function name() external returns (string memory);
-
-    function decimals() external returns (uint8);
-
-    function symbol() external returns (string memory);
-}
-
-interface IERC20InternetBond {
-
-    function ratio() external view returns (uint256);
-
-    function isRebasing() external view returns (bool);
+interface IERC20Mintable is IERC20PeggedToken {
 }

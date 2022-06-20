@@ -2,8 +2,6 @@
 pragma solidity ^0.8.6;
 pragma abicoder v2;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-
 import "../libraries/ProofParser.sol";
 import "../interfaces/ICrossChainBridge.sol";
 

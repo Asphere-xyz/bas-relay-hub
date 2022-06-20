@@ -9,9 +9,7 @@ const CrossChainBridge = artifacts.require("CrossChainBridge");
 const SimpleTokenFactory = artifacts.require("SimpleTokenFactory");
 const SimpleToken = artifacts.require("SimpleToken");
 const BridgeRouter = artifacts.require("BridgeRouter");
-
-const TestTokenFactory = artifacts.require("SimpleTokenFactory_Test");
-const TestTokenFactory2 = artifacts.require("SimpleTokenFactory_Test2");
+const TestTokenFactory = artifacts.require("TestTokenFactory");
 
 const {
   createSimpleTokenMetaData,
@@ -54,10 +52,10 @@ contract("CrossChainBridge", function (accounts) {
       await crossChainBridge.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       simpleToken1 = await SimpleToken.new();
-      await simpleToken1.initAndObtainOwnership(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr Network'), 0, ZERO_ADDRESS, {from: owner});
+      await simpleToken1.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr Network'), 0, ZERO_ADDRESS, {from: owner});
       await simpleToken1.mint(owner, '100000000000000000000');
       simpleToken2 = await SimpleToken.new();
-      await simpleToken2.initAndObtainOwnership(web3.utils.fromAscii('Bnkr'), web3.utils.fromAscii('Bnkr Network'), 0, ZERO_ADDRESS, {from: owner});
+      await simpleToken2.initialize(web3.utils.fromAscii('Bnkr'), web3.utils.fromAscii('Bnkr Network'), 0, ZERO_ADDRESS, {from: owner});
       await simpleToken2.mint(owner, maxUInt256);
     });
 
@@ -183,7 +181,7 @@ contract("CrossChainBridge", function (accounts) {
       await crossChainBridge.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
-      await ankrToken.initAndObtainOwnership(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
+      await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
       await ankrToken.mint(owner, '100000000000000000000');
     });
 
@@ -411,9 +409,9 @@ contract("CrossChainBridge", function (accounts) {
       const testFactory = await TestTokenFactory.new();
       await crossChainBridge.setTokenFactory(testFactory.address);
 
-      assert.equal(await pegToken.symbol(), 'TeST');
-      assert.equal(await pegToken.name(), 'Test Token');
-      assert.equal(await pegToken.decimals(), '10');
+      assert.equal(await pegToken.symbol(), 'ETH');
+      assert.equal(await pegToken.name(), 'Ethereum');
+      assert.equal((await pegToken.decimals()).toString(10), '18');
     });
   });
 
@@ -438,7 +436,7 @@ contract("CrossChainBridge", function (accounts) {
       await crossChainBridge.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
-      await ankrToken.initAndObtainOwnership(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
+      await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
       await ankrToken.mint(owner, '100000000000000000000');
     });
 
@@ -655,7 +653,7 @@ contract("CrossChainBridge", function (accounts) {
         chainId = 1;
       }
       // token factory (use TestToken2 that allows minting by anyone)
-      tokenFactory = await TestTokenFactory2.new();
+      tokenFactory = await TestTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
       // bridge
@@ -668,7 +666,7 @@ contract("CrossChainBridge", function (accounts) {
       await CrossChainBridge2.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
-      await ankrToken.initAndObtainOwnership(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
+      await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
       await ankrToken.mint(owner, '100000000000000000000');
     });
 
@@ -748,10 +746,10 @@ contract("CrossChainBridge", function (accounts) {
       //Check balances
       assert.equal(await pegToken1.symbol(), 'ETH');
       assert.equal(await pegToken1.name(), 'Ethereum');
-      assert.equal(await pegToken1.decimals(), '18');
+      assert.equal((await pegToken1.decimals()).toString(10), '18');
       assert.equal(await pegToken2.symbol(), 'ETH');
       assert.equal(await pegToken2.name(), 'Ethereum');
-      assert.equal(await pegToken2.decimals(), '18');
+      assert.equal((await pegToken2.decimals()).toString(10), '18');
       const peggedBalance1 = await pegToken1.balanceOf(owner);
       const peggedBalance2 = await pegToken2.balanceOf(recipient);
       assert.equal(peggedBalance1.toString(10), '600');
@@ -800,10 +798,10 @@ contract("CrossChainBridge", function (accounts) {
       //Check balances
       assert.equal(await pegToken1.symbol(), 'ANKR');
       assert.equal(await pegToken1.name(), 'Ankr Network');
-      assert.equal(await pegToken1.decimals(), '18');
+      assert.equal((await pegToken1.decimals()).toString(10), '18');
       assert.equal(await pegToken2.symbol(), 'ANKR');
       assert.equal(await pegToken2.name(), 'Ankr Network');
-      assert.equal(await pegToken2.decimals(), '18');
+      assert.equal((await pegToken2.decimals()).toString(10), '18');
       const peggedBalance1 = await pegToken1.balanceOf(owner);
       const peggedBalance2 = await pegToken2.balanceOf(recipient);
       assert.equal(peggedBalance1.toString(10), '700');
@@ -823,7 +821,7 @@ contract("CrossChainBridge", function (accounts) {
         chainId = 1;
       }
       // token factory (use TestToken2 that allows minting by anyone)
-      tokenFactory = await TestTokenFactory2.new();
+      tokenFactory = await TestTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
       // bridge
@@ -836,7 +834,7 @@ contract("CrossChainBridge", function (accounts) {
       await CrossChainBridge2.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
-      await ankrToken.initAndObtainOwnership(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
+      await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
       await ankrToken.mint(owner, '100000000000000000000');
     });
 
