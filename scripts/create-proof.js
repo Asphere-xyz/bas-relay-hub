@@ -1,7 +1,7 @@
 const {BaseTrie} = require('merkle-patricia-tree'),
   Web3 = require('web3');
-const {hexToNumber, numberToHex} = require("web3-utils");
-const {rlp, toBuffer} = require("ethereumjs-util");
+const {hexToNumber, numberToHex} = require("web3-utils"),
+  {rlp, toBuffer} = require("ethereumjs-util");
 
 const sendJsonRpcRequest = async (web3, data) => {
   return new Promise((resolve, reject) => {
@@ -90,6 +90,9 @@ const main = async () => {
     proof.value = '0x' + foundPath.node.value.toString('hex');
   }
 
+  console.log();
+  console.log('-----------------------------');
+  console.log();
   console.log(JSON.stringify(proof, null, 2));
   console.log();
   console.log('-----------------------------');

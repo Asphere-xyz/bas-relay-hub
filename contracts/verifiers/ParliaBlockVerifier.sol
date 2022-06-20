@@ -9,9 +9,6 @@ import "../libraries/RLP.sol";
 
 contract ParliaBlockVerifier is IProofVerificationFunction {
 
-    using EnumerableSet for EnumerableSet.AddressSet;
-    using BitMaps for BitMaps.BitMap;
-
     uint32 internal immutable _confirmationBlocks;
     uint32 internal immutable _epochInterval;
 
@@ -218,7 +215,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
     }
 
     function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory verifiedBlock) {
-        require(blockProofs.length >= _confirmationBlocks, "make sure proofs are enough");
+        require(blockProofs.length >= _confirmationBlocks, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached
         address[] memory uniqueValidators = new address[](blockProofs.length);
         uint64 uniqueValidatorsLength = 0;

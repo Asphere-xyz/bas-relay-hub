@@ -104,22 +104,22 @@ library MerklePatriciaProof {
     returns (bytes memory)
     {
         bytes memory nibbles;
-        if (b.length > 0) {
-            uint8 offset;
-            uint8 hpNibble = uint8(_getNthNibbleOfBytes(0, b));
-            if (hpNibble == 1 || hpNibble == 3) {
-                nibbles = new bytes(b.length * 2 - 1);
-                bytes1 oddNibble = _getNthNibbleOfBytes(1, b);
-                nibbles[0] = oddNibble;
-                offset = 1;
-            } else {
-                nibbles = new bytes(b.length * 2 - 2);
-                offset = 0;
-            }
-
-            for (uint256 i = offset; i < nibbles.length; i++) {
-                nibbles[i] = _getNthNibbleOfBytes(i - offset + 2, b);
-            }
+        if (b.length == 0) {
+            return nibbles;
+        }
+        uint8 offset;
+        uint8 hpNibble = uint8(_getNthNibbleOfBytes(0, b));
+        if (hpNibble == 1 || hpNibble == 3) {
+            nibbles = new bytes(b.length * 2 - 1);
+            bytes1 oddNibble = _getNthNibbleOfBytes(1, b);
+            nibbles[0] = oddNibble;
+            offset = 1;
+        } else {
+            nibbles = new bytes(b.length * 2 - 2);
+            offset = 0;
+        }
+        for (uint256 i = offset; i < nibbles.length; i++) {
+            nibbles[i] = _getNthNibbleOfBytes(i - offset + 2, b);
         }
         return nibbles;
     }

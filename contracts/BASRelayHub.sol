@@ -2,6 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 
 import "./interfaces/IProofVerificationFunction.sol";
 import "./interfaces/IBASRelayHub.sol";

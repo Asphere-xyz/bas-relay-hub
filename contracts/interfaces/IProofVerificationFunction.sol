@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
-import "./IValidatorSet.sol";
-
-interface IProofVerificationFunction is IValidatorSet {
+interface IProofVerificationFunction {
 
     function verifyCheckpointBlock(bytes calldata genesisBlock, uint256 chainId, bytes32 checkpointHash) external view returns (address[] memory initialValidatorSet);
 
