@@ -18,5 +18,5 @@ interface IProofVerificationFunction {
         bytes32 receiptRoot;
     }
 
-    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory);
+    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory result);
 }

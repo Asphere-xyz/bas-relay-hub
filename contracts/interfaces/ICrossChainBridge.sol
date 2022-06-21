@@ -60,7 +60,12 @@ interface ICrossChainBridge {
 
     function deposit(address fromToken, uint256 toChain, address toAddress, uint256 amount) external;
 
-    function withdraw(bytes calldata encodedProof, bytes calldata rawReceipt, bytes calldata receiptRootSignature) external;
+    function withdraw(
+        bytes[] calldata blockProofs,
+        bytes calldata rawReceipt,
+        bytes memory proofPath,
+        bytes calldata proofSiblings
+    ) external;
 
     function factoryPeggedToken(uint256 fromChain, Metadata calldata metaData) external;
 

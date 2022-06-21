@@ -54,12 +54,12 @@ contract BASRelayHub is IBASRelayHub {
     }
 
     function registerCertifiedBAS(uint256 chainId, bytes calldata genesisBlock) external {
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH);
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying);
     }
 
     function registerUsingCheckpoint(uint256 chainId, bytes calldata checkpointBlock, bytes32 checkpointHash, bytes calldata checkpointSignature) external {
         require(ECDSA.recover(keccak256(abi.encode(chainId, checkpointHash)), checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash);
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash, ChainStatus.Verifying);
     }
 
     function _verificationFunction(IProofVerificationFunction verificationFunction) internal view returns (IProofVerificationFunction) {
@@ -71,10 +71,10 @@ contract BASRelayHub is IBASRelayHub {
     }
 
     function registerBAS(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata genesisBlock) external {
-        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH);
+        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying);
     }
 
-    function _registerChainWithVerificationFunction(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata blockProof, bytes32 checkpointHash) internal {
+    function _registerChainWithVerificationFunction(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata blockProof, bytes32 checkpointHash, ChainStatus defaultStatus) internal {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
         address[] memory initialValidatorSet;
@@ -83,7 +83,7 @@ contract BASRelayHub is IBASRelayHub {
         } else {
             initialValidatorSet = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash);
         }
-        bas.chainStatus = ChainStatus.Verifying;
+        bas.chainStatus = defaultStatus;
         bas.verificationFunction = verificationFunction;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         _updateActiveValidatorSet(validatorHistory, initialValidatorSet, 0);
@@ -160,11 +160,11 @@ contract BASRelayHub is IBASRelayHub {
         emit ValidatorSetUpdated(chainId, newValidatorSet);
     }
 
-    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external view {
+    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external view virtual override returns (bool) {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
-        require(MerklePatriciaProof.verify(keccak256(rawReceipt), path, siblings, verifiedBlock.receiptRoot), "bad proof");
+        return MerklePatriciaProof.verify(keccak256(rawReceipt), path, siblings, verifiedBlock.receiptRoot);
     }
 }

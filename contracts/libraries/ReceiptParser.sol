@@ -3,12 +3,11 @@ pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-import "./CallDataRLPReader.sol";
-import "./Utils.sol";
-
 import "../interfaces/ICrossChainBridge.sol";
 
-library EthereumVerifier {
+import "./RLP.sol";
+
+library ReceiptParser {
 
     bytes32 constant TOPIC_PEG_IN_LOCKED = keccak256("DepositLocked(uint256,address,address,address,address,uint256,(bytes32,bytes32,uint256,address))");
     bytes32 constant TOPIC_PEG_IN_BURNED = keccak256("DepositBurned(uint256,address,address,address,address,uint256,(bytes32,bytes32,uint256,address),address)");
@@ -44,34 +43,35 @@ library EthereumVerifier {
         return metadata;
     }
 
-    function parseTransactionReceipt(uint256 receiptOffset) internal view returns (State memory, PegInType pegInType) {
-        State memory state;
-        /* parse peg-in data from logs */
-        uint256 iter = CallDataRLPReader.beginIteration(receiptOffset + 0x20);
+    function parseTransactionReceipt(bytes calldata rawReceipt) internal view returns (State memory state, PegInType pegInType) {
+        uint256 receiptOffset = RLP.openRlp(rawReceipt);
+        // parse peg-in data from logs
+        uint256 iter = RLP.beginIteration(receiptOffset);
         {
-            /* postStateOrStatus - we must ensure that tx is not reverted */
+            // postStateOrStatus - we must ensure that tx is not reverted
             uint256 statusOffset = iter;
-            iter = CallDataRLPReader.next(iter);
-            require(CallDataRLPReader.payloadLen(statusOffset, iter - statusOffset) == 1, "tx is reverted");
+            iter = RLP.next(iter);
+            require(RLP.payloadLen(statusOffset, iter - statusOffset) == 1, "tx is reverted");
         }
-        /* skip cumulativeGasUsed */
-        iter = CallDataRLPReader.next(iter);
-        /* logs - we need to find our logs */
+        // skip cumulativeGasUsed
+        iter = RLP.next(iter);
+        // logs - we need to find our logs
         uint256 logs = iter;
-        iter = CallDataRLPReader.next(iter);
-        uint256 logsIter = CallDataRLPReader.beginIteration(logs);
+        iter = RLP.next(iter);
+        uint256 logsIter = RLP.beginIteration(logs);
         for (; logsIter < iter;) {
             uint256 log = logsIter;
-            logsIter = CallDataRLPReader.next(logsIter);
-            /* make sure there is only one peg-in event in logs */
+            logsIter = RLP.next(logsIter);
+            // make sure there is only one peg-in event in logs
             PegInType logType = _decodeReceiptLogs(state, log);
             if (logType != PegInType.None) {
                 require(pegInType == PegInType.None, "multiple logs");
                 pegInType = logType;
             }
         }
-        /* don't allow to process if peg-in type is unknown */
+        // don't allow to process if peg-in type is unknown
         require(pegInType != PegInType.None, "missing logs");
+        state.receiptHash = keccak256(rawReceipt);
         return (state, pegInType);
     }
 
@@ -79,40 +79,40 @@ library EthereumVerifier {
         State memory state,
         uint256 log
     ) internal view returns (PegInType pegInType) {
-        uint256 logIter = CallDataRLPReader.beginIteration(log);
+        uint256 logIter = RLP.beginIteration(log);
         address contractAddress;
         {
-            /* parse smart contract address */
+            // parse smart contract address
             uint256 addressOffset = logIter;
-            logIter = CallDataRLPReader.next(logIter);
-            contractAddress = CallDataRLPReader.toAddress(addressOffset);
+            logIter = RLP.next(logIter);
+            contractAddress = RLP.toAddress(addressOffset);
         }
-        /* topics */
+        // topics
         bytes32 mainTopic;
         address fromAddress;
         address toAddress;
         {
             uint256 topicsIter = logIter;
-            logIter = CallDataRLPReader.next(logIter);
+            logIter = RLP.next(logIter);
             // Must be 3 topics RLP encoded: event signature, fromAddress, toAddress
             // Each topic RLP encoded is 33 bytes (0xa0[32 bytes data])
             // Total payload: 99 bytes. Since it's list with total size bigger than 55 bytes we need 2 bytes prefix (0xf863)
             // So total size of RLP encoded topics array must be 101
-            if (CallDataRLPReader.itemLength(topicsIter) != 101) {
+            if (RLP.itemLength(topicsIter) != 101) {
                 return PegInType.None;
             }
-            topicsIter = CallDataRLPReader.beginIteration(topicsIter);
-            mainTopic = bytes32(CallDataRLPReader.toUintStrict(topicsIter));
-            topicsIter = CallDataRLPReader.next(topicsIter);
-            fromAddress = address(bytes20(uint160(CallDataRLPReader.toUintStrict(topicsIter))));
-            topicsIter = CallDataRLPReader.next(topicsIter);
-            toAddress = address(bytes20(uint160(CallDataRLPReader.toUintStrict(topicsIter))));
-            topicsIter = CallDataRLPReader.next(topicsIter);
+            topicsIter = RLP.beginIteration(topicsIter);
+            mainTopic = bytes32(RLP.toUintStrict(topicsIter));
+            topicsIter = RLP.next(topicsIter);
+            fromAddress = address(bytes20(uint160(RLP.toUintStrict(topicsIter))));
+            topicsIter = RLP.next(topicsIter);
+            toAddress = address(bytes20(uint160(RLP.toUintStrict(topicsIter))));
+            topicsIter = RLP.next(topicsIter);
             require(topicsIter == logIter); // safety check that iteration is finished
         }
 
-        uint256 ptr = CallDataRLPReader.rawDataPtr(logIter);
-        logIter = CallDataRLPReader.next(logIter);
+        uint256 ptr = RLP.rawDataPtr(logIter);
+        logIter = RLP.next(logIter);
         uint256 len = logIter - ptr;
         {
             // parse logs based on topic type and check that event data has correct length

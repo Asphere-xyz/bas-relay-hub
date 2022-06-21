@@ -10,25 +10,32 @@ const SimpleTokenFactory = artifacts.require("SimpleTokenFactory");
 const SimpleToken = artifacts.require("SimpleToken");
 const BridgeRouter = artifacts.require("BridgeRouter");
 const TestTokenFactory = artifacts.require("TestTokenFactory");
+const TestRelayHub = artifacts.require("TestRelayHub");
 
 const {
   createSimpleTokenMetaData,
   nativeAddressByNetwork,
   encodeTransactionReceipt,
   simpleTokenProxyAddress,
-  encodeProof,
   nameAndSymbolByNetwork,
 } = require('./bridge-utils');
 
 const {
-  signMessageUsingPrivateKey, expectError
+  expectError
 } = require('./evm-utils');
 
-const NOTARY_ADDRESS = "0x256e78f10eE9897bda1c36C30471A2b3c8aE5186";
-const NOTARY_PRIVATE_KEY = "5667c2a27bf6c4daf6091094009fa4f30a6573b45ec836704eb20d5f219ce778";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 contract("CrossChainBridge", function (accounts) {
+
+  const getFixedChainId = async () => {
+    let chainId = await web3.eth.getChainId();
+    // use default 1 chain id for ganache because CHAINID opcode returns always 1
+    if (global.config.network === 'ganache') {
+      chainId = 1;
+    }
+    return chainId;
+  }
 
   describe("pegged tokens are working correctly", async () => {
 
@@ -37,19 +44,17 @@ contract("CrossChainBridge", function (accounts) {
     const maxUInt256 = '115792089237316195423570985008687907853269984665640564039457584007913129639935'; // 2 ** 256 - 1
 
     before(async function () {
-      chainId = await web3.eth.getChainId();
       // use default 1 chain id for ganache because CHAINID opcode returns always 1
-      if (chainId === 1337) {
-        chainId = 1;
-      }
+      chainId = await getFixedChainId();
       // token factory
       tokenFactory = await SimpleTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
+      const basRelayHub = await TestRelayHub.new();
       // bridge
       crossChainBridge = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await crossChainBridge.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await crossChainBridge.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       simpleToken1 = await SimpleToken.new();
       await simpleToken1.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr Network'), 0, ZERO_ADDRESS, {from: owner});
@@ -80,19 +85,8 @@ contract("CrossChainBridge", function (accounts) {
     it("pegged native token works", async () => {
       const tx1 = await crossChainBridge.deposit(chainId, owner, {value: '10000', from: owner});
       const pegTokenAddress = simpleTokenProxyAddress(crossChainBridge.address, nativeAddressByNetwork('test')).toLowerCase();
-      const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000002710',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: owner});
+      const [rawReceipt] = encodeTransactionReceipt(tx1.receipt);
+      await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: owner});
       const pegToken = new SimpleToken(pegTokenAddress);
       const peggedBalance = await pegToken.balanceOf(owner),
         lockedBalance = await web3.eth.getBalance(crossChainBridge.address);
@@ -109,19 +103,8 @@ contract("CrossChainBridge", function (accounts) {
       await simpleToken1.approve(crossChainBridge.address, '10000');
       let tx1 = await crossChainBridge.deposit(simpleToken1.address, chainId, owner, '10000');
       const pegTokenAddress = simpleTokenProxyAddress(crossChainBridge.address, simpleToken1.address).toLowerCase();
-      const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: owner});
+      const [rawReceipt] = encodeTransactionReceipt(tx1.receipt);
+      await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: owner});
       const pegToken = new SimpleToken(pegTokenAddress);
       const peggedBalance = await pegToken.balanceOf(owner),
         lockedBalance = await simpleToken1.balanceOf(crossChainBridge.address);
@@ -140,18 +123,7 @@ contract("CrossChainBridge", function (accounts) {
       let tx1 = await crossChainBridge.deposit(simpleToken2.address, chainId, owner, maxUInt256);
       const pegTokenAddress = simpleTokenProxyAddress(crossChainBridge.address, simpleToken2.address).toLowerCase();
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: owner});
+      await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: owner});
       const pegToken = new SimpleToken(pegTokenAddress);
       const peggedBalance = await pegToken.balanceOf(owner),
         lockedBalance = await simpleToken2.balanceOf(crossChainBridge.address);
@@ -166,19 +138,16 @@ contract("CrossChainBridge", function (accounts) {
     let [owner, recipient] = accounts;
 
     before(async function () {
-      chainId = await web3.eth.getChainId();
-      // use default 1 chain id for ganache because CHAINID opcode returns always 1
-      if (chainId === 1337) {
-        chainId = 1;
-      }
+      chainId = await getFixedChainId();
       // token factory
       tokenFactory = await SimpleTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
+      const basRelayHub = await TestRelayHub.new();
       // bridge
       crossChainBridge = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await crossChainBridge.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await crossChainBridge.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
@@ -186,7 +155,6 @@ contract("CrossChainBridge", function (accounts) {
     });
 
     it('add allowed contract', async () => {
-      // console.log(`Chain ID is: ${chainId}`);
       const {logs} = await crossChainBridge.addAllowedContract(crossChainBridge.address, chainId);
       assert.equal(logs[0].event, 'ContractAllowed');
       assert.equal(logs[0].args['contractAddress'], crossChainBridge.address);
@@ -217,25 +185,10 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['fromToken'].toLowerCase(), nativeAddressByNetwork('test').toLowerCase());
       assert.equal(logs1[0].args['toToken'].toLowerCase(), pegTokenAddress);
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
-      // console.log(`amount: ${logs1[0].args['totalAmount'].toString('hex')}`)
+
       // withdraw pegged token (peg-out)
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000001',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      // console.log(`Proof data: ${txProof}`);
-      // console.log(`Receipt hash: ${receiptHash}`);
-      // console.log(`Raw receipt: ${rawReceipt}`);
-      // console.log(`Signature: ${sig}`);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -281,18 +234,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawUnlocked');
@@ -320,19 +262,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
       // withdraw pegged token (peg-out)
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      // console.log(rawReceipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(`Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -374,18 +304,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawUnlocked');
@@ -421,19 +340,16 @@ contract("CrossChainBridge", function (accounts) {
     let [owner, sender, recipient] = accounts;
 
     before(async function () {
-      chainId = await web3.eth.getChainId();
-      // use default 1 chain id for ganache because CHAINID opcode returns always 1
-      if (chainId === 1337) {
-        chainId = 1;
-      }
+      chainId = await getFixedChainId();
       // token factory
       tokenFactory = await SimpleTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
+      const basRelayHub = await TestRelayHub.new();
       // bridge
       crossChainBridge = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await crossChainBridge.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await crossChainBridge.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
@@ -460,24 +376,9 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['fromToken'].toLowerCase(), nativeAddressByNetwork('test').toLowerCase());
       assert.equal(logs1[0].args['toToken'].toLowerCase(), pegTokenAddress);
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
-      // console.log(`amount: ${logs1[0].args['totalAmount'].toString('hex')}`)
       // withdraw pegged token (peg-out)
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000001',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      // console.log(`Proof data: ${txProof}`);
-      // console.log(`Receipt hash: ${receiptHash}`);
-      // console.log(`Signature: ${sig}`);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -523,18 +424,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawUnlocked');
@@ -562,19 +452,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
       // withdraw pegged token (peg-out)
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      // console.log(rawReceipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(`Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -616,18 +494,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '1');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await crossChainBridge.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await crossChainBridge.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawUnlocked');
@@ -647,23 +514,20 @@ contract("CrossChainBridge", function (accounts) {
     let [owner, sender, recipient] = accounts;
 
     before(async function () {
-      chainId = await web3.eth.getChainId();
-      // use default 1 chain id for ganache because CHAINID opcode returns always 1
-      if (chainId === 1337) {
-        chainId = 1;
-      }
+      chainId = await getFixedChainId();
       // token factory (use TestToken2 that allows minting by anyone)
       tokenFactory = await TestTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
+      const basRelayHub = await TestRelayHub.new();
       // bridge
       CrossChainBridge0 = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await CrossChainBridge0.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await CrossChainBridge0.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       CrossChainBridge1 = await CrossChainBridge.new();
-      await CrossChainBridge1.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await CrossChainBridge1.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       CrossChainBridge2 = await CrossChainBridge.new();
-      await CrossChainBridge2.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await CrossChainBridge2.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
@@ -704,7 +568,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(await CrossChainBridge2.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge2.address, ankrToken.address).toLowerCase()), true);
     })
 
-    it("pegged(of native) to pegged (burn)", async () => {
+    it("pegged (of native) to pegged (burn)", async () => {
       // deposit tokens to smart contract (peg-in)
       const pegTokenAddress1 = simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test')).toLowerCase();
       const pegTokenAddress2 = simpleTokenProxyAddress(CrossChainBridge2.address, nativeAddressByNetwork('test')).toLowerCase();
@@ -722,18 +586,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '400');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await CrossChainBridge2.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -774,18 +627,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '300');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await CrossChainBridge2.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -815,23 +657,20 @@ contract("CrossChainBridge", function (accounts) {
     let [owner, sender, recipient] = accounts;
 
     before(async function () {
-      chainId = await web3.eth.getChainId();
-      // use default 1 chain id for ganache because CHAINID opcode returns always 1
-      if (chainId === 1337) {
-        chainId = 1;
-      }
+      chainId = await getFixedChainId();
       // token factory (use TestToken2 that allows minting by anyone)
       tokenFactory = await TestTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
+      const basRelayHub = await TestRelayHub.new();
       // bridge
       CrossChainBridge0 = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await CrossChainBridge0.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await CrossChainBridge0.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       CrossChainBridge1 = await CrossChainBridge.new();
-      await CrossChainBridge1.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await CrossChainBridge1.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       CrossChainBridge2 = await CrossChainBridge.new();
-      await CrossChainBridge2.initialize(NOTARY_ADDRESS, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await CrossChainBridge2.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
@@ -864,7 +703,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase()), true);
     })
 
-    it("pegged(of native) to pegged (burn)", async () => {
+    it("pegged (of native) to pegged (burn)", async () => {
       // deposit tokens to smart contract (peg-in)
       const pegTokenAddress1 = simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test')).toLowerCase();
       const pegTokenAddress2 = simpleTokenProxyAddress(CrossChainBridge2.address, nativeAddressByNetwork('test')).toLowerCase();
@@ -882,18 +721,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '400');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await CrossChainBridge2.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -934,18 +762,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '300');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      const [txProof, txProofHash] = encodeProof(
-        chainId,
-        1,
-        '0xc9169c94141eff6ffd29448101f753cb7244e641f4b3ffb702108c2b2c95c749',
-        '0x0000000000000000000000000000000000000000000000000000000000026160',
-        '0x983be696bbaa2701c5685a59fdf0f047b0683bf69ba8567eead5d98ee16462ad',
-        '0x0000000000000000000000000000000000000000000000000000000000000002',
-        receiptHash,
-        '0x0000000000000000000000000000000000000000000000000000000000000000',
-      );
-      const sig = signMessageUsingPrivateKey(NOTARY_PRIVATE_KEY, txProofHash);
-      let tx2 = await CrossChainBridge2.withdraw(txProof, rawReceipt, sig, {from: recipient}),
+      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');

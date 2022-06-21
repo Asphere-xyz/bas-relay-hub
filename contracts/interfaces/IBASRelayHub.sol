@@ -2,4 +2,6 @@
 pragma solidity ^0.8.0;
 
 interface IBASRelayHub {
+
+    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external view returns (bool);
 }

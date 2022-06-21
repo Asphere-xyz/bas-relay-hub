@@ -214,7 +214,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         return (newValidatorSet, epochNumber);
     }
 
-    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory verifiedBlock) {
+    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory result) {
         require(blockProofs.length >= _confirmationBlocks, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached
         address[] memory uniqueValidators = new address[](blockProofs.length);
@@ -222,8 +222,8 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         // check all blocks
         bytes32 parentHash;
         for (uint256 i = 0; i < _confirmationBlocks; i++) {
-            VerifiedParliaBlockResult memory result = _extractParliaSigningData(blockProofs[i], chainId);
-            address signer = result.coinbase;
+            VerifiedParliaBlockResult memory vbr = _extractParliaSigningData(blockProofs[i], chainId);
+            address signer = vbr.coinbase;
             // make sure signer exists (we should know validator order, it can be optimized)
             bool signerFound = false;
             for (uint256 j = 0; j < existingValidatorSet.length; j++) {
@@ -245,20 +245,20 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             // first block is block with proof
             if (i == 0) {
                 ParliaBlockHeader memory pbh = parseParliaBlockHeader(blockProofs[i]);
-                verifiedBlock.blockHash = result.blockHash;
-                verifiedBlock.parentHash = result.parentHash;
-                verifiedBlock.blockNumber = result.blockNumber;
-                verifiedBlock.stateRoot = pbh.stateRoot;
-                verifiedBlock.txRoot = pbh.txRoot;
-                verifiedBlock.receiptRoot = pbh.receiptRoot;
-                parentHash = result.blockHash;
+                result.blockHash = vbr.blockHash;
+                result.parentHash = vbr.parentHash;
+                result.blockNumber = vbr.blockNumber;
+                result.stateRoot = pbh.stateRoot;
+                result.txRoot = pbh.txRoot;
+                result.receiptRoot = pbh.receiptRoot;
+                parentHash = vbr.blockHash;
             } else {
-                require(result.parentHash == parentHash, "bad parent hash");
-                parentHash = result.blockHash;
+                require(vbr.parentHash == parentHash, "bad parent hash");
+                parentHash = vbr.blockHash;
             }
         }
         require(uniqueValidatorsLength >= _confirmationBlocks, "quorum not reached");
-        return verifiedBlock;
+        return result;
     }
 
     struct ParliaBlockHeader {

@@ -47,21 +47,21 @@ library SimpleTokenProxyUtils {
     bytes4 constant internal SET_BEACON_SIG = bytes4(keccak256("setBeacon(address)"));
 
     function deploySimpleTokenProxy(address bridge, bytes32 salt, ICrossChainBridge.Metadata memory metaData) internal returns (address) {
-        /* lets concat bytecode with constructor parameters */
+        // lets concat bytecode with constructor parameters
         bytes memory bytecode = SIMPLE_TOKEN_PROXY_BYTECODE;
-        /* deploy new contract and store contract address in result variable */
+        // deploy new contract and store contract address in result variable
         address result;
         assembly {
             result := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
         }
         require(result != address(0x00), "deploy failed");
-        /* setup impl */
+        // setup impl
         (bool success,) = result.call(abi.encodePacked(SET_BEACON_SIG, abi.encode(bridge)));
         require(success, "setBeacon failed");
-        /* setup meta data */
+        // setup meta data
         (success,) = result.call(abi.encodePacked(SET_META_DATA_SIG, abi.encode(metaData)));
         require(success, "set metadata failed");
-        /* return generated contract address */
+        // return generated contract address
         return result;
     }
 

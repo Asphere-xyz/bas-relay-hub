@@ -39,17 +39,17 @@ library TestTokenFactoryUtils {
     bytes32 constant internal TEST_TOKEN_TEMPLATE_HASH = keccak256(TEST_TOKEN_TEMPLATE_BYTECODE);
 
     function deployTestTokenTemplate(TestTokenFactory templateFactory) internal returns (address) {
-        /* we can use any deterministic salt here, since we don't care about it */
+        // we can use any deterministic salt here, since we don't care about it
         bytes32 salt = TEST_TOKEN_TEMPLATE_SALT;
-        /* concat bytecode with constructor */
+        // concat bytecode with constructor
         bytes memory bytecode = TEST_TOKEN_TEMPLATE_BYTECODE;
-        /* deploy contract and store result in result variable */
+        // deploy contract and store result in result variable
         address result;
         assembly {
             result := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
         }
         require(result != address(0x00), "deploy failed");
-        /* check that generated contract address is correct */
+        // check that generated contract address is correct
         require(result == simpleTokenTemplateAddress(templateFactory), "address mismatched");
         return result;
     }

@@ -21,12 +21,12 @@ contract SimpleToken is ERC20, IERC20PeggedToken {
     constructor() ERC20("", "") {
     }
 
-    function initialize(bytes32 symbol, bytes32 name, uint256 originChain, address originAddress) public emptyOwner {
+    function initialize(bytes32 symbol_, bytes32 name_, uint256 originChain, address originAddress) public emptyOwner {
         // remember owner of the smart contract (only cross chain bridge)
         _owner = msg.sender;
         // remember new symbol and name
-        _symbol = symbol;
-        _name = name;
+        _symbol = symbol_;
+        _name = name_;
         // store origin address and chain id (where the original token exists)
         _originAddress = originAddress;
         _originChain = originChain;
@@ -98,17 +98,17 @@ library SimpleTokenFactoryUtils {
     bytes32 constant internal SIMPLE_TOKEN_TEMPLATE_HASH = keccak256(SIMPLE_TOKEN_TEMPLATE_BYTECODE);
 
     function deploySimpleTokenTemplate(SimpleTokenFactory templateFactory) internal returns (address) {
-        /* we can use any deterministic salt here, since we don't care about it */
+        // we can use any deterministic salt here, since we don't care about it
         bytes32 salt = SIMPLE_TOKEN_TEMPLATE_SALT;
-        /* concat bytecode with constructor */
+        // concat bytecode with constructor
         bytes memory bytecode = SIMPLE_TOKEN_TEMPLATE_BYTECODE;
-        /* deploy contract and store result in result variable */
+        // deploy contract and store result in result variable
         address result;
         assembly {
             result := create2(0, add(bytecode, 0x20), mload(bytecode), salt)
         }
         require(result != address(0x00), "deploy failed");
-        /* check that generated contract address is correct */
+        // check that generated contract address is correct
         require(result == simpleTokenTemplateAddress(templateFactory), "address mismatched");
         return result;
     }

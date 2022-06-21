@@ -2,7 +2,6 @@
 pragma solidity ^0.8.6;
 pragma abicoder v2;
 
-import "../libraries/ProofParser.sol";
 import "../interfaces/ICrossChainBridge.sol";
 
 import "./SimpleTokenProxy.sol";
@@ -14,10 +13,10 @@ contract BridgeRouter {
     }
 
     function factoryPeggedToken(address fromToken, address toToken, ICrossChainBridge.Metadata memory metaData, address bridge) public returns (IERC20Mintable) {
-        /* we must use delegate call because we need to deploy new contract from bridge contract to have valid address */
+        // we must use delegate call because we need to deploy new contract from bridge contract to have valid address
         address targetToken = SimpleTokenProxyUtils.deploySimpleTokenProxy(bridge, bytes32(bytes20(fromToken)), metaData);
         require(targetToken == toToken, "bad chain");
-        /* to token is our new pegged token */
+        // to token is our new pegged token
         return IERC20Mintable(toToken);
     }
 }
