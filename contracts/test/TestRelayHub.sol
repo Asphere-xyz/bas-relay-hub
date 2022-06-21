@@ -10,7 +10,11 @@ contract TestRelayHub is BASRelayHub {
     constructor() BASRelayHub(new FakeBlockVerifier()) {
     }
 
-    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external view override returns (bool) {
+    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external pure override returns (bool) {
         return true;
+    }
+
+    function enableCrossChainBridge(uint256 chainId, address bridgeAddress) external {
+        _registeredChains[chainId].bridgeAddress = bridgeAddress;
     }
 }

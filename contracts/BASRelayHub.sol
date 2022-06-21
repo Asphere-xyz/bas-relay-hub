@@ -7,17 +7,21 @@ import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 
 import "./interfaces/IProofVerificationFunction.sol";
 import "./interfaces/IBASRelayHub.sol";
+import "./interfaces/IBridgeRegistry.sol";
 
 import "./libraries/BitUtils.sol";
 import "./libraries/MerklePatriciaProof.sol";
 
-contract BASRelayHub is IBASRelayHub {
-
-    IProofVerificationFunction internal constant DEFAULT_VERIFICATION_FUNCTION = IProofVerificationFunction(0x0000000000000000000000000000000000000000);
-    bytes32 internal constant ZERO_BLOCK_HASH = bytes32(0x00);
+contract BASRelayHub is IBASRelayHub, IBridgeRegistry {
 
     using EnumerableSet for EnumerableSet.AddressSet;
     using BitMaps for BitMaps.BitMap;
+
+    // lets keep default verification function as zero to make it manageable by BAS relay hub itself
+    IProofVerificationFunction internal constant DEFAULT_VERIFICATION_FUNCTION = IProofVerificationFunction(0x0000000000000000000000000000000000000000);
+
+    bytes32 internal constant ZERO_BLOCK_HASH = bytes32(0x00);
+    address internal constant ZERO_ADDRESS = address(0x00);
 
     event ChainRegistered(uint256 indexed chainId, address[] initValidatorSet);
     event ValidatorSetUpdated(uint256 indexed chainId, address[] newValidatorSet);
@@ -40,6 +44,7 @@ contract BASRelayHub is IBASRelayHub {
     struct BAS {
         ChainStatus chainStatus;
         IProofVerificationFunction verificationFunction;
+        address bridgeAddress;
     }
 
     // default verification function for certified chains
@@ -53,28 +58,46 @@ contract BASRelayHub is IBASRelayHub {
         _defaultVerificationFunction = defaultVerificationFunction;
     }
 
-    function registerCertifiedBAS(uint256 chainId, bytes calldata genesisBlock) external {
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying);
+    function getBridgeAddress(uint256 chainId) external view returns (address) {
+        return _registeredChains[chainId].bridgeAddress;
     }
 
-    function registerUsingCheckpoint(uint256 chainId, bytes calldata checkpointBlock, bytes32 checkpointHash, bytes calldata checkpointSignature) external {
+    function registerCertifiedBAS(
+        uint256 chainId,
+        bytes calldata genesisBlock,
+        address bridgeAddress
+    ) external {
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying, bridgeAddress);
+    }
+
+    function registerUsingCheckpoint(
+        uint256 chainId,
+        bytes calldata checkpointBlock,
+        bytes32 checkpointHash,
+        bytes calldata checkpointSignature,
+        address bridgeAddress
+    ) external {
         require(ECDSA.recover(keccak256(abi.encode(chainId, checkpointHash)), checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash, ChainStatus.Verifying);
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash, ChainStatus.Verifying, bridgeAddress);
     }
 
-    function _verificationFunction(IProofVerificationFunction verificationFunction) internal view returns (IProofVerificationFunction) {
-        if (verificationFunction == DEFAULT_VERIFICATION_FUNCTION) {
-            return _defaultVerificationFunction;
-        } else {
-            return verificationFunction;
-        }
+    function registerBAS(
+        uint256 chainId,
+        IProofVerificationFunction verificationFunction,
+        bytes calldata genesisBlock,
+        address bridgeAddress
+    ) external {
+        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying, bridgeAddress);
     }
 
-    function registerBAS(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata genesisBlock) external {
-        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying);
-    }
-
-    function _registerChainWithVerificationFunction(uint256 chainId, IProofVerificationFunction verificationFunction, bytes calldata blockProof, bytes32 checkpointHash, ChainStatus defaultStatus) internal {
+    function _registerChainWithVerificationFunction(
+        uint256 chainId,
+        IProofVerificationFunction verificationFunction,
+        bytes calldata blockProof,
+        bytes32 checkpointHash,
+        ChainStatus defaultStatus,
+        address bridgeAddress
+    ) internal {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
         address[] memory initialValidatorSet;
@@ -85,6 +108,7 @@ contract BASRelayHub is IBASRelayHub {
         }
         bas.chainStatus = defaultStatus;
         bas.verificationFunction = verificationFunction;
+        bas.bridgeAddress = bridgeAddress;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         _updateActiveValidatorSet(validatorHistory, initialValidatorSet, 0);
         _registeredChains[chainId] = bas;
@@ -166,5 +190,13 @@ contract BASRelayHub is IBASRelayHub {
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
         return MerklePatriciaProof.verify(keccak256(rawReceipt), path, siblings, verifiedBlock.receiptRoot);
+    }
+
+    function _verificationFunction(IProofVerificationFunction verificationFunction) internal view returns (IProofVerificationFunction) {
+        if (verificationFunction == DEFAULT_VERIFICATION_FUNCTION) {
+            return _defaultVerificationFunction;
+        } else {
+            return verificationFunction;
+        }
     }
 }

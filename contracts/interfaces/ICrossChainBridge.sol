@@ -8,7 +8,7 @@ interface ICrossChainBridge {
     event ContractAllowed(address contractAddress, uint256 toChain);
     event ContractDisallowed(address contractAddress, uint256 toChain);
     event ConsensusChanged(address consensusAddress);
-    event TokenImplementationChanged(address consensusAddress);
+    event TokenFactoryChanged(address oldValue, address newValue);
 
     struct Metadata {
         bytes32 symbol;

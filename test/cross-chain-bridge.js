@@ -28,6 +28,8 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 contract("CrossChainBridge", function (accounts) {
 
+  let [owner, recipient] = accounts;
+
   const getFixedChainId = async () => {
     let chainId = await web3.eth.getChainId();
     // use default 1 chain id for ganache because CHAINID opcode returns always 1
@@ -37,24 +39,32 @@ contract("CrossChainBridge", function (accounts) {
     return chainId;
   }
 
+  const createCrossChainBridge = async (tokenFactory) => {
+    const chainId = await getFixedChainId();
+    // token factory
+    if (!tokenFactory) {
+      tokenFactory = await SimpleTokenFactory.new();
+    }
+    // router
+    const bridgeRouter = await BridgeRouter.new(),
+      basRelayHub = await TestRelayHub.new();
+    // bridge
+    const crossChainBridge = await CrossChainBridge.new();
+    const {name, symbol} = nameAndSymbolByNetwork('test');
+    await crossChainBridge.initialize(basRelayHub.address, basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+    // enable cross chain bridge
+    await basRelayHub.enableCrossChainBridge(chainId, crossChainBridge.address);
+    return crossChainBridge;
+  }
+
   describe("pegged tokens are working correctly", async () => {
 
-    let tokenFactory, crossChainBridge, simpleToken1, simpleToken2, chainId;
-    let [owner] = accounts;
+    let crossChainBridge, simpleToken1, simpleToken2, chainId;
     const maxUInt256 = '115792089237316195423570985008687907853269984665640564039457584007913129639935'; // 2 ** 256 - 1
 
     before(async function () {
-      // use default 1 chain id for ganache because CHAINID opcode returns always 1
       chainId = await getFixedChainId();
-      // token factory
-      tokenFactory = await SimpleTokenFactory.new();
-      // router
-      const bridgeRouter = await BridgeRouter.new();
-      const basRelayHub = await TestRelayHub.new();
-      // bridge
-      crossChainBridge = await CrossChainBridge.new();
-      const {name, symbol} = nameAndSymbolByNetwork('test');
-      await crossChainBridge.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge = await createCrossChainBridge();
       // tokens
       simpleToken1 = await SimpleToken.new();
       await simpleToken1.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr Network'), 0, ZERO_ADDRESS, {from: owner});
@@ -62,13 +72,6 @@ contract("CrossChainBridge", function (accounts) {
       simpleToken2 = await SimpleToken.new();
       await simpleToken2.initialize(web3.utils.fromAscii('Bnkr'), web3.utils.fromAscii('Bnkr Network'), 0, ZERO_ADDRESS, {from: owner});
       await simpleToken2.mint(owner, maxUInt256);
-    });
-
-    it('add allowed contract', async () => {
-      const {logs} = await crossChainBridge.addAllowedContract(crossChainBridge.address, chainId);
-      assert.equal(logs[0].event, 'ContractAllowed');
-      assert.equal(logs[0].args['contractAddress'], crossChainBridge.address);
-      assert.equal(logs[0].args['toChain'], chainId);
     });
 
     it("warmup pegged tokens", async () => {
@@ -134,31 +137,15 @@ contract("CrossChainBridge", function (accounts) {
 
   describe("use pre-deployed pegged contracts", async () => {
 
-    let tokenFactory, crossChainBridge, ankrToken, chainId;
-    let [owner, recipient] = accounts;
+    let crossChainBridge, ankrToken, chainId;
 
     before(async function () {
       chainId = await getFixedChainId();
-      // token factory
-      tokenFactory = await SimpleTokenFactory.new();
-      // router
-      const bridgeRouter = await BridgeRouter.new();
-      const basRelayHub = await TestRelayHub.new();
-      // bridge
-      crossChainBridge = await CrossChainBridge.new();
-      const {name, symbol} = nameAndSymbolByNetwork('test');
-      await crossChainBridge.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge = await createCrossChainBridge();
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
       await ankrToken.mint(owner, '100000000000000000000');
-    });
-
-    it('add allowed contract', async () => {
-      const {logs} = await crossChainBridge.addAllowedContract(crossChainBridge.address, chainId);
-      assert.equal(logs[0].event, 'ContractAllowed');
-      assert.equal(logs[0].args['contractAddress'], crossChainBridge.address);
-      assert.equal(logs[0].args['toChain'], chainId);
     });
 
     it("warmup pegged tokens", async () => {
@@ -336,31 +323,15 @@ contract("CrossChainBridge", function (accounts) {
 
   describe("deploy pegged contracts on the fly", async () => {
 
-    let tokenFactory, crossChainBridge, ankrToken, chainId;
-    let [owner, sender, recipient] = accounts;
+    let crossChainBridge, ankrToken, chainId;
 
     before(async function () {
       chainId = await getFixedChainId();
-      // token factory
-      tokenFactory = await SimpleTokenFactory.new();
-      // router
-      const bridgeRouter = await BridgeRouter.new();
-      const basRelayHub = await TestRelayHub.new();
-      // bridge
-      crossChainBridge = await CrossChainBridge.new();
-      const {name, symbol} = nameAndSymbolByNetwork('test');
-      await crossChainBridge.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge = await createCrossChainBridge();
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
       await ankrToken.mint(owner, '100000000000000000000');
-    });
-
-    it('add allowed contract', async () => {
-      const {logs} = await crossChainBridge.addAllowedContract(crossChainBridge.address, chainId);
-      assert.equal(logs[0].event, 'ContractAllowed');
-      assert.equal(logs[0].args['contractAddress'], crossChainBridge.address);
-      assert.equal(logs[0].args['toChain'], chainId);
     });
 
     it("peg-in native to pegged (lock)", async () => {
@@ -509,9 +480,7 @@ contract("CrossChainBridge", function (accounts) {
 
   describe("simulate different cross chain bridges", async () => {
 
-    let tokenFactory, CrossChainBridge0, CrossChainBridge1, CrossChainBridge2, ankrToken,
-      ratioFeed, chainId;
-    let [owner, sender, recipient] = accounts;
+    let tokenFactory, crossChainBridge0, crossChainBridge1, crossChainBridge2, ankrToken, chainId;
 
     before(async function () {
       chainId = await getFixedChainId();
@@ -519,15 +488,18 @@ contract("CrossChainBridge", function (accounts) {
       tokenFactory = await TestTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
-      const basRelayHub = await TestRelayHub.new();
+      const basRelayHub0 = await TestRelayHub.new();
+      const basRelayHub1 = await TestRelayHub.new();
+      const basRelayHub2 = await TestRelayHub.new();
       // bridge
-      CrossChainBridge0 = await CrossChainBridge.new();
+      crossChainBridge0 = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await CrossChainBridge0.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
-      CrossChainBridge1 = await CrossChainBridge.new();
-      await CrossChainBridge1.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
-      CrossChainBridge2 = await CrossChainBridge.new();
-      await CrossChainBridge2.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await crossChainBridge0.initialize(basRelayHub0.address, basRelayHub0.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge1 = await CrossChainBridge.new();
+      await crossChainBridge1.initialize(basRelayHub1.address, basRelayHub1.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge2 = await CrossChainBridge.new();
+      await crossChainBridge2.initialize(basRelayHub2.address, basRelayHub2.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
@@ -535,48 +507,40 @@ contract("CrossChainBridge", function (accounts) {
     });
 
     it('add allowed contract', async () => {
-      const tx1 = await CrossChainBridge1.addAllowedContract(CrossChainBridge2.address, chainId);
-      const logs1 = tx1.logs;
-      assert.equal(logs1[0].event, 'ContractAllowed');
-      assert.equal(logs1[0].args['contractAddress'], CrossChainBridge2.address);
-      assert.equal(logs1[0].args['toChain'], chainId);
-      const tx2 = await CrossChainBridge2.addAllowedContract(CrossChainBridge1.address, chainId);
-      const logs2 = tx2.logs;
-      assert.equal(logs2[0].event, 'ContractAllowed');
-      assert.equal(logs2[0].args['contractAddress'], CrossChainBridge1.address);
-      assert.equal(logs2[0].args['toChain'], chainId);
-      const tx3 = await CrossChainBridge1.addAllowedContract(CrossChainBridge0.address, chainId + 1);
-      const tx4 = await CrossChainBridge2.addAllowedContract(CrossChainBridge0.address, chainId + 1);
+      (await TestRelayHub.at(await crossChainBridge1.getRelayHub())).enableCrossChainBridge(chainId, crossChainBridge2.address);
+      (await TestRelayHub.at(await crossChainBridge2.getRelayHub())).enableCrossChainBridge(chainId, crossChainBridge1.address);
+      (await TestRelayHub.at(await crossChainBridge1.getRelayHub())).enableCrossChainBridge(chainId + 1, crossChainBridge0.address);
+      (await TestRelayHub.at(await crossChainBridge2.getRelayHub())).enableCrossChainBridge(chainId + 1, crossChainBridge0.address);
     });
 
     it("warmup pegged tokens", async () => {
       // warmup pegged ethereum
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test'))), false);
-      await CrossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ETH', 'Ethereum', chainId + 1, nativeAddressByNetwork('test')));
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test'))), true);
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, nativeAddressByNetwork('test'))), false);
+      await crossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ETH', 'Ethereum', chainId + 1, nativeAddressByNetwork('test')));
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, nativeAddressByNetwork('test'))), true);
       // warmup pegged ankr
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase()), false);
-      await CrossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ANKR', 'Ankr Network', chainId + 1, ankrToken.address));
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase()), true);
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, ankrToken.address).toLowerCase()), false);
+      await crossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ANKR', 'Ankr Network', chainId + 1, ankrToken.address));
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, ankrToken.address).toLowerCase()), true);
       // warmup pegged ethereum
-      assert.equal(await CrossChainBridge2.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge2.address, nativeAddressByNetwork('test'))), false);
-      await CrossChainBridge2.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ETH', 'Ethereum', chainId + 1, nativeAddressByNetwork('test')));
-      assert.equal(await CrossChainBridge2.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge2.address, nativeAddressByNetwork('test'))), true);
+      assert.equal(await crossChainBridge2.isPeggedToken(simpleTokenProxyAddress(crossChainBridge2.address, nativeAddressByNetwork('test'))), false);
+      await crossChainBridge2.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ETH', 'Ethereum', chainId + 1, nativeAddressByNetwork('test')));
+      assert.equal(await crossChainBridge2.isPeggedToken(simpleTokenProxyAddress(crossChainBridge2.address, nativeAddressByNetwork('test'))), true);
       // warmup pegged ankr
-      assert.equal(await CrossChainBridge2.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge2.address, ankrToken.address).toLowerCase()), false);
-      await CrossChainBridge2.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ANKR', 'Ankr Network', chainId + 1, ankrToken.address));
-      assert.equal(await CrossChainBridge2.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge2.address, ankrToken.address).toLowerCase()), true);
+      assert.equal(await crossChainBridge2.isPeggedToken(simpleTokenProxyAddress(crossChainBridge2.address, ankrToken.address).toLowerCase()), false);
+      await crossChainBridge2.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ANKR', 'Ankr Network', chainId + 1, ankrToken.address));
+      assert.equal(await crossChainBridge2.isPeggedToken(simpleTokenProxyAddress(crossChainBridge2.address, ankrToken.address).toLowerCase()), true);
     })
 
     it("pegged (of native) to pegged (burn)", async () => {
       // deposit tokens to smart contract (peg-in)
-      const pegTokenAddress1 = simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test')).toLowerCase();
-      const pegTokenAddress2 = simpleTokenProxyAddress(CrossChainBridge2.address, nativeAddressByNetwork('test')).toLowerCase();
+      const pegTokenAddress1 = simpleTokenProxyAddress(crossChainBridge1.address, nativeAddressByNetwork('test')).toLowerCase();
+      const pegTokenAddress2 = simpleTokenProxyAddress(crossChainBridge2.address, nativeAddressByNetwork('test')).toLowerCase();
       const pegToken1 = new SimpleToken(pegTokenAddress1);
       const pegToken2 = new SimpleToken(pegTokenAddress2);
       await pegToken1.mint(owner, '1000');
 
-      let tx1 = await CrossChainBridge1.deposit(pegToken1.address, chainId, recipient, '400'),
+      let tx1 = await crossChainBridge1.deposit(pegToken1.address, chainId, recipient, '400'),
         logs1 = tx1.logs;
       assert.equal(logs1[0].event, 'DepositBurned');
       assert.equal(logs1[0].args['fromAddress'].toLowerCase(), owner.toLowerCase());
@@ -586,7 +550,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '400');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
+      let tx2 = await crossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -611,13 +575,13 @@ contract("CrossChainBridge", function (accounts) {
 
     it("pegged (of ERC20) to pegged (burn)", async () => {
       // deposit tokens to smart contract (peg-in)
-      const pegTokenAddress1 = simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase();
-      const pegTokenAddress2 = simpleTokenProxyAddress(CrossChainBridge2.address, ankrToken.address).toLowerCase()
+      const pegTokenAddress1 = simpleTokenProxyAddress(crossChainBridge1.address, ankrToken.address).toLowerCase();
+      const pegTokenAddress2 = simpleTokenProxyAddress(crossChainBridge2.address, ankrToken.address).toLowerCase()
       const pegToken1 = new SimpleToken(pegTokenAddress1);
       const pegToken2 = new SimpleToken(pegTokenAddress2);
       await pegToken1.mint(owner, '1000');
 
-      let tx1 = await CrossChainBridge1.deposit(pegToken1.address, chainId, recipient, '300'),
+      let tx1 = await crossChainBridge1.deposit(pegToken1.address, chainId, recipient, '300'),
         logs1 = tx1.logs;
       assert.equal(logs1[0].event, 'DepositBurned');
       assert.equal(logs1[0].args['fromAddress'].toLowerCase(), owner.toLowerCase());
@@ -627,7 +591,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '300');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
+      let tx2 = await crossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -653,8 +617,7 @@ contract("CrossChainBridge", function (accounts) {
 
   describe("deploy pegged contracts on the fly", async () => {
 
-    let tokenFactory, CrossChainBridge0, CrossChainBridge1, CrossChainBridge2, ankrToken, chainId;
-    let [owner, sender, recipient] = accounts;
+    let tokenFactory, crossChainBridge0, crossChainBridge1, crossChainBridge2, ankrToken, chainId;
 
     before(async function () {
       chainId = await getFixedChainId();
@@ -662,15 +625,17 @@ contract("CrossChainBridge", function (accounts) {
       tokenFactory = await TestTokenFactory.new();
       // router
       const bridgeRouter = await BridgeRouter.new();
-      const basRelayHub = await TestRelayHub.new();
+      const basRelayHub0 = await TestRelayHub.new();
+      const basRelayHub1 = await TestRelayHub.new();
+      const basRelayHub2 = await TestRelayHub.new();
       // bridge
-      CrossChainBridge0 = await CrossChainBridge.new();
+      crossChainBridge0 = await CrossChainBridge.new();
       const {name, symbol} = nameAndSymbolByNetwork('test');
-      await CrossChainBridge0.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
-      CrossChainBridge1 = await CrossChainBridge.new();
-      await CrossChainBridge1.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
-      CrossChainBridge2 = await CrossChainBridge.new();
-      await CrossChainBridge2.initialize(basRelayHub.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      await crossChainBridge0.initialize(basRelayHub0.address, basRelayHub0.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge1 = await CrossChainBridge.new();
+      await crossChainBridge1.initialize(basRelayHub1.address, basRelayHub1.address, tokenFactory.address, bridgeRouter.address, symbol, name);
+      crossChainBridge2 = await CrossChainBridge.new();
+      await crossChainBridge2.initialize(basRelayHub2.address, basRelayHub2.address, tokenFactory.address, bridgeRouter.address, symbol, name);
       // tokens
       ankrToken = await SimpleToken.new();
       await ankrToken.initialize(web3.utils.fromAscii('Ankr'), web3.utils.fromAscii('Ankr'), 0, ZERO_ADDRESS, {from: owner});
@@ -678,40 +643,32 @@ contract("CrossChainBridge", function (accounts) {
     });
 
     it('add allowed contract', async () => {
-      const tx1 = await CrossChainBridge1.addAllowedContract(CrossChainBridge2.address, chainId);
-      const logs1 = tx1.logs;
-      assert.equal(logs1[0].event, 'ContractAllowed');
-      assert.equal(logs1[0].args['contractAddress'], CrossChainBridge2.address);
-      assert.equal(logs1[0].args['toChain'], chainId);
-      const tx2 = await CrossChainBridge2.addAllowedContract(CrossChainBridge1.address, chainId);
-      const logs2 = tx2.logs;
-      assert.equal(logs2[0].event, 'ContractAllowed');
-      assert.equal(logs2[0].args['contractAddress'], CrossChainBridge1.address);
-      assert.equal(logs2[0].args['toChain'], chainId);
-      const tx3 = await CrossChainBridge1.addAllowedContract(CrossChainBridge0.address, chainId + 1);
-      const tx4 = await CrossChainBridge2.addAllowedContract(CrossChainBridge0.address, chainId + 1);
+      (await TestRelayHub.at(await crossChainBridge1.getRelayHub())).enableCrossChainBridge(chainId, crossChainBridge2.address);
+      (await TestRelayHub.at(await crossChainBridge2.getRelayHub())).enableCrossChainBridge(chainId, crossChainBridge1.address);
+      (await TestRelayHub.at(await crossChainBridge1.getRelayHub())).enableCrossChainBridge(chainId + 1, crossChainBridge0.address);
+      (await TestRelayHub.at(await crossChainBridge2.getRelayHub())).enableCrossChainBridge(chainId + 1, crossChainBridge0.address);
     });
 
     it("warmup pegged tokens", async () => {
       // warmup pegged ethereum
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test'))), false);
-      await CrossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ETH1', 'Ethereum1', chainId + 1, nativeAddressByNetwork('test')));
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test'))), true);
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, nativeAddressByNetwork('test'))), false);
+      await crossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ETH1', 'Ethereum1', chainId + 1, nativeAddressByNetwork('test')));
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, nativeAddressByNetwork('test'))), true);
       // warmup pegged ankr
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase()), false);
-      await CrossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ANKR1', 'Ankr Network1', chainId + 1, ankrToken.address));
-      assert.equal(await CrossChainBridge1.isPeggedToken(simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase()), true);
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, ankrToken.address).toLowerCase()), false);
+      await crossChainBridge1.factoryPeggedToken(chainId + 1, createSimpleTokenMetaData('ANKR1', 'Ankr Network1', chainId + 1, ankrToken.address));
+      assert.equal(await crossChainBridge1.isPeggedToken(simpleTokenProxyAddress(crossChainBridge1.address, ankrToken.address).toLowerCase()), true);
     })
 
     it("pegged (of native) to pegged (burn)", async () => {
       // deposit tokens to smart contract (peg-in)
-      const pegTokenAddress1 = simpleTokenProxyAddress(CrossChainBridge1.address, nativeAddressByNetwork('test')).toLowerCase();
-      const pegTokenAddress2 = simpleTokenProxyAddress(CrossChainBridge2.address, nativeAddressByNetwork('test')).toLowerCase();
+      const pegTokenAddress1 = simpleTokenProxyAddress(crossChainBridge1.address, nativeAddressByNetwork('test')).toLowerCase();
+      const pegTokenAddress2 = simpleTokenProxyAddress(crossChainBridge2.address, nativeAddressByNetwork('test')).toLowerCase();
       const pegToken1 = new SimpleToken(pegTokenAddress1);
       const pegToken2 = new SimpleToken(pegTokenAddress2);
       await pegToken1.mint(owner, '1000');
 
-      let tx1 = await CrossChainBridge1.deposit(pegToken1.address, chainId, recipient, '400'),
+      let tx1 = await crossChainBridge1.deposit(pegToken1.address, chainId, recipient, '400'),
         logs1 = tx1.logs;
       assert.equal(logs1[0].event, 'DepositBurned');
       assert.equal(logs1[0].args['fromAddress'].toLowerCase(), owner.toLowerCase());
@@ -721,7 +678,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '400');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
+      let tx2 = await crossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
@@ -746,13 +703,13 @@ contract("CrossChainBridge", function (accounts) {
 
     it("pegged (of ERC20) to pegged (burn)", async () => {
       // deposit tokens to smart contract (peg-in)
-      const pegTokenAddress1 = simpleTokenProxyAddress(CrossChainBridge1.address, ankrToken.address).toLowerCase();
-      const pegTokenAddress2 = simpleTokenProxyAddress(CrossChainBridge2.address, ankrToken.address).toLowerCase()
+      const pegTokenAddress1 = simpleTokenProxyAddress(crossChainBridge1.address, ankrToken.address).toLowerCase();
+      const pegTokenAddress2 = simpleTokenProxyAddress(crossChainBridge2.address, ankrToken.address).toLowerCase()
       const pegToken1 = new SimpleToken(pegTokenAddress1);
       const pegToken2 = new SimpleToken(pegTokenAddress2);
       await pegToken1.mint(owner, '1000');
 
-      let tx1 = await CrossChainBridge1.deposit(pegToken1.address, chainId, recipient, '300'),
+      let tx1 = await crossChainBridge1.deposit(pegToken1.address, chainId, recipient, '300'),
         logs1 = tx1.logs;
       assert.equal(logs1[0].event, 'DepositBurned');
       assert.equal(logs1[0].args['fromAddress'].toLowerCase(), owner.toLowerCase());
@@ -762,7 +719,7 @@ contract("CrossChainBridge", function (accounts) {
       assert.equal(logs1[0].args['totalAmount'].toString(10), '300');
       // withdraw native tokens
       const [rawReceipt, receiptHash] = encodeTransactionReceipt(tx1.receipt);
-      let tx2 = await CrossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
+      let tx2 = await crossChainBridge2.withdraw([], rawReceipt, '0x', '0x', {from: recipient}),
         logs2 = tx2.logs;
       // console.log(` ~ Peg-Out gas used: ${tx2.receipt.cumulativeGasUsed}`);
       assert.equal(logs2[0].event, 'WithdrawMinted');
