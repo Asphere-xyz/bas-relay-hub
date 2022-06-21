@@ -10,7 +10,7 @@ contract TestRelayHub is BASRelayHub {
     constructor() BASRelayHub(new FakeBlockVerifier()) {
     }
 
-    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external pure override returns (bool) {
+    function checkReceiptProof(uint256 /*chainId*/, bytes[] calldata /*blockProofs*/, bytes memory /*rawReceipt*/, bytes memory /*path*/, bytes calldata /*siblings*/) external pure override returns (bool) {
         return true;
     }
 
