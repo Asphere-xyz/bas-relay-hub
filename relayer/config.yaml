@@ -1,0 +1,15 @@
+root:
+  chain-name: bsc
+  rpc-url: https://rpc.ankr.com/bsc
+  relay-hub-address: 0x0000000000000000000000000000000000000000
+  chain-id: 56
+  epoch-blocks: 200
+
+child:
+  chain-name: bas-dev-02
+  rpc-url: https://rpc.dev-02.bas.ankr.com
+  relay-hub-address: 0x0000000000000000000000000000000000000000
+  chain-id: 140001
+  epoch-blocks: 1200
+
+confirmation-blocks: 1

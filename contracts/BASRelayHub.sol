@@ -115,7 +115,7 @@ contract BASRelayHub is IBASRelayHub, IBridgeRegistry {
         emit ChainRegistered(chainId, initialValidatorSet);
     }
 
-    function _updateActiveValidatorSet(ValidatorHistory storage validatorHistory, address[] memory validatorsList, uint64 atEpoch) internal {
+    function _updateActiveValidatorSet(ValidatorHistory storage validatorHistory, address[] memory validatorsList, uint64 epochNumber) internal {
         uint256[] memory buckets = new uint256[]((validatorHistory.allValidators.length() >> 8) + 1);
         // build set of buckets with new bits
         for (uint256 i = 0; i < validatorsList.length; i++) {
@@ -127,12 +127,12 @@ contract BASRelayHub is IBASRelayHub, IBridgeRegistry {
             buckets[index >> 8] |= 1 << (index & 0xff);
         }
         // copy buckets (its cheaper to keep buckets in memory)
-        BitMaps.BitMap storage currentBitmap = validatorHistory.activeValidators[atEpoch];
+        BitMaps.BitMap storage currentBitmap = validatorHistory.activeValidators[epochNumber];
         for (uint256 i = 0; i < buckets.length; i++) {
             currentBitmap._data[i] = buckets[i];
         }
         // remember latest verified epoch
-        validatorHistory.latestKnownEpoch = atEpoch;
+        validatorHistory.latestKnownEpoch = epochNumber;
     }
 
     function getActiveValidators(uint256 chainId) external view returns (address[] memory) {
@@ -170,6 +170,11 @@ contract BASRelayHub is IBASRelayHub, IBridgeRegistry {
             uniqueValidators++;
         }
         return uniqueValidators;
+    }
+
+    function getLatestTransitionedEpoch(uint256 chainId) external view returns (uint64) {
+        ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
+        return validatorHistory.latestKnownEpoch;
     }
 
     function updateValidatorSet(uint256 chainId, bytes[] calldata blockProofs) external {
