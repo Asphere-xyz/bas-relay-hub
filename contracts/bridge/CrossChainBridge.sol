@@ -11,7 +11,7 @@ import "@openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.
 import "../interfaces/ICrossChainBridge.sol";
 import "../interfaces/IERC20.sol";
 import "../interfaces/IBridgeRegistry.sol";
-import "../interfaces/IBASRelayHub.sol";
+import "../interfaces/IRelayHub.sol";
 
 import "../libraries/ReceiptParser.sol";
 import "../libraries/StringUtils.sol";
@@ -25,7 +25,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
     mapping(bytes32 => bool) internal _usedProofs;
     mapping(address => address) internal _peggedTokenOrigin;
 
-    IBASRelayHub internal _basRelayHub;
+    IRelayHub internal _basRelayHub;
     IBridgeRegistry internal _bridgeRegistry;
     Metadata internal _nativeTokenMetadata;
     SimpleTokenFactory internal _simpleTokenFactory;
@@ -33,7 +33,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
 
     function initialize(
         IBridgeRegistry bridgeRegistry,
-        IBASRelayHub basRelayHub,
+        IRelayHub basRelayHub,
         SimpleTokenFactory tokenFactory,
         BridgeRouter bridgeRouter,
         string memory nativeTokenSymbol,
@@ -47,7 +47,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
 
     function __CrossChainBridge_init(
         IBridgeRegistry bridgeRegistry,
-        IBASRelayHub basRelayHub,
+        IRelayHub basRelayHub,
         SimpleTokenFactory tokenFactory,
         BridgeRouter bridgeRouter,
         string memory nativeTokenSymbol,
@@ -75,7 +75,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
         return _simpleTokenFactory.getImplementation();
     }
 
-    function getRelayHub() external view returns (IBASRelayHub) {
+    function getRelayHub() external view returns (IRelayHub) {
         return _basRelayHub;
     }
 

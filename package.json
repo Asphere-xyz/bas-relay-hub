@@ -20,7 +20,7 @@
     "ethereumjs-util": "^7.1.5",
     "rlp": "^2.2.6",
     "solidity-coverage": "^0.7.18",
-    "truffle": "^5.4.32",
+    "truffle": "^5.5.18",
     "web3": "^1.3.4",
     "web3-utils": "^1.7.0"
   },

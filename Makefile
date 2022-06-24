@@ -13,7 +13,7 @@ compile:
 .PHONY: abi
 abi: compile
 	mkdir -p ./relayer/abigen
-	abigen --abi=./build/abi/BASRelayHub.json --type=RelayHub --pkg=abigen --lang=go --out=./relayer/abigen/basrelayhub.go
+	abigen --abi=./build/abi/RelayHub.json --type=RelayHub --pkg=abigen --lang=go --out=./relayer/abigen/basrelayhub.go
 
 .PHONY: all
 all: install test compile

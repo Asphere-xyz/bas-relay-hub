@@ -6,7 +6,7 @@
 /** @var assert */
 
 const ParliaBlockVerifier = artifacts.require("ParliaBlockVerifier");
-const BASRelayHub = artifacts.require("BASRelayHub");
+const RelayHub = artifacts.require("RelayHub");
 
 const BSC_REGISTRATION_PARAMS = [
   // chain id
@@ -17,11 +17,11 @@ const BSC_REGISTRATION_PARAMS = [
   '0x0000000000000000000000000000000000000000',
 ]
 
-contract("BASRelayHub", async (accounts) => {
+contract("RelayHub", async (accounts) => {
   const [] = accounts
   it("its possible to register certified BAS with pre-defined verification function", async () => {
     const defaultVerificationFunction = await ParliaBlockVerifier.new(12, 200),
-      basRelayHub = await BASRelayHub.new(defaultVerificationFunction.address);
+      basRelayHub = await RelayHub.new(defaultVerificationFunction.address);
     const res1 = await basRelayHub.registerCertifiedBAS(...BSC_REGISTRATION_PARAMS);
     assert.equal(res1.logs[0].event, 'ChainRegistered');
     assert.equal(res1.logs[0].args.chainId, '56');
@@ -68,7 +68,7 @@ contract("BASRelayHub", async (accounts) => {
   });
   it("check receipt proof", async () => {
     const defaultVerificationFunction = await ParliaBlockVerifier.new(10, 200),
-      basRelayHub = await BASRelayHub.new(defaultVerificationFunction.address);
+      basRelayHub = await RelayHub.new(defaultVerificationFunction.address);
     // register BSC genesis block and activate it
     await basRelayHub.registerCertifiedBAS(...BSC_REGISTRATION_PARAMS);
     await basRelayHub.updateValidatorSet('56', [

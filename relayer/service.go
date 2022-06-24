@@ -120,7 +120,7 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 				continue
 			}
 			log.Infof("epoch %d is reached, doing transition", latestTransitionedEpoch+1)
-			if err := s.createEpochTransition(target.client, latestTransitionedEpoch*source.chainConfig.EpochBlocks, source.config, source.chainConfig); err != nil {
+			if err := s.createEpochTransition(source, target, latestTransitionedEpoch*source.chainConfig.EpochBlocks); err != nil {
 				log.Fatalf("failed to create epoch transition: %+v", err)
 			}
 			latestTransitionedEpoch++
@@ -128,19 +128,17 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 	}
 }
 
-func (s *RelayService) createEpochTransition(client *ethclient.Client, epochBlock uint64, config *Config, chainConfig ChainConfig) error {
-	chainId := big.NewInt(int64(chainConfig.ChainId))
+func (s *RelayService) createEpochTransition(source, target *nodeConfig, epochBlock uint64) error {
 	var blockProofs [][]byte
-	relayHub, _ := abigen.NewRelayHub(common.HexToAddress(chainConfig.RelayHubAddress), client)
-	for i := epochBlock; i <= epochBlock+config.ConfirmationBlocks; i++ {
-		block, err := client.BlockByNumber(context.TODO(), big.NewInt(int64(i)))
+	for i := epochBlock; i <= epochBlock+source.config.ConfirmationBlocks; i++ {
+		block, err := source.client.BlockByNumber(context.TODO(), big.NewInt(int64(i)))
 		if err != nil {
 			return err
 		}
-		blockRlp := parliaRlp(block.Header(), chainId)
+		blockRlp := parliaRlp(block.Header(), source.chainId)
 		blockProofs = append(blockProofs, blockRlp)
 	}
-	_, _ = relayHub.UpdateValidatorSet(&bind.TransactOpts{}, chainId, blockProofs)
+	_, _ = target.relayHub.UpdateValidatorSet(&bind.TransactOpts{}, source.chainId, blockProofs)
 	return nil
 }
 

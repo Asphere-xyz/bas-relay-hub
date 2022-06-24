@@ -27,7 +27,6 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         address coinbase;
         address[] validators;
         bytes32 parentHash;
-        bytes signingData;
         bytes signature;
     }
 
@@ -135,7 +134,6 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             } else {
                 signature[64] = bytes1(uint8(27));
             }
-            result.signingData = signingData;
             result.signature = signature;
             result.coinbase = ECDSA.recover(keccak256(signingData), signature);
         }

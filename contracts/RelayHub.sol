@@ -6,13 +6,13 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 
 import "./interfaces/IProofVerificationFunction.sol";
-import "./interfaces/IBASRelayHub.sol";
+import "./interfaces/IRelayHub.sol";
 import "./interfaces/IBridgeRegistry.sol";
 
 import "./libraries/BitUtils.sol";
 import "./libraries/MerklePatriciaProof.sol";
 
-contract BASRelayHub is IBASRelayHub, IBridgeRegistry {
+contract RelayHub is IRelayHub, IBridgeRegistry {
 
     using EnumerableSet for EnumerableSet.AddressSet;
     using BitMaps for BitMaps.BitMap;
