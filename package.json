@@ -14,7 +14,7 @@
   "license": "ISC",
   "devDependencies": {
     "@openzeppelin/contracts": "^4.4.2",
-    "@truffle/hdwallet-provider": "^1.2.6",
+    "@truffle/hdwallet-provider": "^2.0.9",
     "bignumber.js": "^9.0.2",
     "eth-gas-reporter": "^0.2.25",
     "ethereumjs-util": "^7.1.5",

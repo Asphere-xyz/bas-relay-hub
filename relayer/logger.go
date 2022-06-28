@@ -2,6 +2,4 @@ package main
 
 import "github.com/sirupsen/logrus"
 
-var log = logrus.New().WithFields(logrus.Fields{
-	"service": "relayer",
-})
+var log = logrus.New().WithFields(logrus.Fields{})

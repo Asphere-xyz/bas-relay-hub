@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/spf13/viper"
 )
 
@@ -12,8 +14,14 @@ type ChainConfig struct {
 	EpochBlocks     uint64
 }
 
+type RelayerConfig struct {
+	PrivateKey *ecdsa.PrivateKey
+}
+
 type Config struct {
 	Root, Child ChainConfig
+
+	Relayer RelayerConfig
 
 	ConfirmationBlocks uint64
 }
@@ -33,6 +41,9 @@ func ConfigFromViper(viper *viper.Viper) *Config {
 			RelayHubAddress: viper.GetString("child.relay-hub-address"),
 			ChainId:         viper.GetUint64("child.chain-id"),
 			EpochBlocks:     viper.GetUint64("child.epoch-blocks"),
+		},
+		Relayer: RelayerConfig{
+			PrivateKey: must(crypto.HexToECDSA(viper.GetString("relayer.private-key"))),
 		},
 		ConfirmationBlocks: viper.GetUint64("confirmation-blocks"),
 	}

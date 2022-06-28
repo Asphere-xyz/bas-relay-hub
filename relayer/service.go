@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/sirupsen/logrus"
 	"math/big"
 	"time"
 )
@@ -99,7 +101,7 @@ func (s *RelayService) toNodeConfig(config *Config, isRoot bool) *nodeConfig {
 }
 
 func (s *RelayService) epochWorker(source, target *nodeConfig) {
-	log := log.WithField("source-name", source.chainConfig.ChainName)
+	log := log.WithField("chain", source.chainConfig.ChainName)
 	log.Infof("subscribing to the chain head events")
 	blockNumberChannel := s.latestBlockFetcher(source.config, source.client)
 	log.Infof("listening for incomming events")
@@ -120,8 +122,10 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 				continue
 			}
 			log.Infof("epoch %d is reached, doing transition", latestTransitionedEpoch+1)
-			if err := s.createEpochTransition(source, target, latestTransitionedEpoch*source.chainConfig.EpochBlocks); err != nil {
-				log.Fatalf("failed to create epoch transition: %+v", err)
+			if err := s.createEpochTransition(source, target, waitForBlock); err != nil {
+				log.WithField("err", err).Errorf("failed to create epoch transition")
+				time.Sleep(30 * time.Second)
+				break
 			}
 			latestTransitionedEpoch++
 		}
@@ -130,15 +134,30 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 
 func (s *RelayService) createEpochTransition(source, target *nodeConfig, epochBlock uint64) error {
 	var blockProofs [][]byte
-	for i := epochBlock; i <= epochBlock+source.config.ConfirmationBlocks; i++ {
+	for i := epochBlock; i < epochBlock+source.config.ConfirmationBlocks; i++ {
 		block, err := source.client.BlockByNumber(context.TODO(), big.NewInt(int64(i)))
 		if err != nil {
 			return err
 		}
-		blockRlp := parliaRlp(block.Header(), source.chainId)
+		blockRlp, err := rlp.EncodeToBytes(block.Header())
+		if err != nil {
+			return err
+		}
+		//println(hexutil.Encode(blockRlp))
 		blockProofs = append(blockProofs, blockRlp)
 	}
-	_, _ = target.relayHub.UpdateValidatorSet(&bind.TransactOpts{}, source.chainId, blockProofs)
+	opts := injectSigner(target.chainId, source.config.Relayer.PrivateKey, nil)
+	log.WithFields(logrus.Fields{
+		"source":     source.chainConfig.ChainName,
+		"target":     target.chainConfig.ChainName,
+		"epochBlock": epochBlock,
+		"from":       opts.From.Hex(),
+	}).Infof("executing epoch transition")
+	tx, err := target.relayHub.UpdateValidatorSet(opts, source.chainId, blockProofs)
+	if err != nil {
+		return err
+	}
+	log.WithField("chain", target.chainConfig.ChainName).WithField("hash", tx.Hash().Hex()).Infof("updated validator set")
 	return nil
 }
 

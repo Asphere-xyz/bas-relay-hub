@@ -7,7 +7,7 @@ contract EmbeddedParliaBlockVerifier is ParliaBlockVerifier {
 
     address constant internal VERIFY_PARLIA_BLOCK_PRECOMPILE = address(0x0000000000000000000000000000004241530001);
 
-    constructor(uint32 confirmationBlocks, uint32 epochInterval) ParliaBlockVerifier(confirmationBlocks, epochInterval) {
+    constructor(uint32 epochInterval) ParliaBlockVerifier(epochInterval) {
     }
 
     function _extractParliaSigningData(bytes calldata blockProof, uint256 chainId) internal view override returns (VerifiedParliaBlockResult memory) {

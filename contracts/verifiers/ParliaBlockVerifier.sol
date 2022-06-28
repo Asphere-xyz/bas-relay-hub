@@ -9,12 +9,14 @@ import "../libraries/RLP.sol";
 
 contract ParliaBlockVerifier is IProofVerificationFunction {
 
-    uint32 internal immutable _confirmationBlocks;
     uint32 internal immutable _epochInterval;
 
-    constructor(uint32 confirmationBlocks, uint32 epochInterval) {
-        _confirmationBlocks = confirmationBlocks;
+    constructor(uint32 epochInterval) {
         _epochInterval = epochInterval;
+    }
+
+    function getEpochInterval() external view returns (uint32) {
+        return _epochInterval;
     }
 
     function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external view returns (VerifiedParliaBlockResult memory result) {
@@ -116,7 +118,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
                 signingData[patchExtraDataAt + 2] = bytes1(uint8(newExtraDataLength >> 0));
             } else if (newExtraDataPrefixLength == 2) {
                 signingData[patchExtraDataAt + 0] = bytes1(uint8(0xb7 + 1));
-                signingData[patchExtraDataAt + 1] = bytes1(uint8(newExtraDataLength >> 8));
+                signingData[patchExtraDataAt + 1] = bytes1(uint8(newExtraDataLength >> 0));
             } else if (newExtraDataLength < 56) {
                 signingData[patchExtraDataAt + 0] = bytes1(uint8(0x80 + newExtraDataLength));
             }
@@ -168,15 +170,14 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
     }
 
     function verifyValidatorTransition(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (address[] memory newValidatorSet, uint64 epochNumber) {
+        uint256 quorumRequired = existingValidatorSet.length * 2 / 3;
+        require(blockProofs.length >= quorumRequired, "not enough proofs");
         bytes32 parentHash;
-        // copy to the stack to avoid SLOAD's
-        (uint32 confirmationBlocks, uint32 epochInterval) = (_confirmationBlocks, _epochInterval);
-        require(blockProofs.length >= confirmationBlocks, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached
         address[] memory uniqueValidators = new address[](blockProofs.length);
         uint64 uniqueValidatorsLength = 0;
         // check all blocks
-        for (uint256 i = 0; i < confirmationBlocks; i++) {
+        for (uint256 i = 0; i < blockProofs.length; i++) {
             VerifiedParliaBlockResult memory result = _extractParliaSigningData(blockProofs[i], chainId);
             address signer = result.coinbase;
             // make sure signer exists (we should know validator order, it can be optimized)
@@ -199,6 +200,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             }
             // first block must be epoch block
             if (i == 0) {
+                uint32 epochInterval = _epochInterval;
                 require(result.blockNumber % epochInterval == 0, "epoch block");
                 epochNumber = result.blockNumber / epochInterval;
                 newValidatorSet = result.validators;
@@ -208,37 +210,40 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
                 parentHash = result.blockHash;
             }
         }
-        require(uniqueValidatorsLength >= confirmationBlocks, "quorum not reached");
+        require(uniqueValidatorsLength >= quorumRequired, "quorum not reached");
         return (newValidatorSet, epochNumber);
     }
 
     function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory result) {
-        require(blockProofs.length >= _confirmationBlocks, "not enough proofs");
+        uint256 quorumRequired = existingValidatorSet.length * 2 / 3;
+        require(blockProofs.length >= quorumRequired, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached
         address[] memory uniqueValidators = new address[](blockProofs.length);
         uint64 uniqueValidatorsLength = 0;
         // check all blocks
         bytes32 parentHash;
-        for (uint256 i = 0; i < _confirmationBlocks; i++) {
+        for (uint256 i = 0; i < blockProofs.length; i++) {
             VerifiedParliaBlockResult memory vbr = _extractParliaSigningData(blockProofs[i], chainId);
             address signer = vbr.coinbase;
             // make sure signer exists (we should know validator order, it can be optimized)
-            bool signerFound = false;
-            for (uint256 j = 0; j < existingValidatorSet.length; j++) {
-                if (existingValidatorSet[j] != signer) continue;
-                signerFound = true;
-                break;
-            }
-            require(signerFound, "unknown signer");
-            bool uniqueFound = false;
-            for (uint256 j = 0; j < uniqueValidatorsLength; j++) {
-                if (uniqueValidators[j] != signer) continue;
-                uniqueFound = true;
-                break;
-            }
-            if (!uniqueFound) {
-                uniqueValidators[uniqueValidatorsLength] = signer;
-                uniqueValidatorsLength++;
+            {
+                bool signerFound = false;
+                for (uint256 j = 0; j < existingValidatorSet.length; j++) {
+                    if (existingValidatorSet[j] != signer) continue;
+                    signerFound = true;
+                    break;
+                }
+                require(signerFound, "unknown signer");
+                bool uniqueFound = false;
+                for (uint256 j = 0; j < uniqueValidatorsLength; j++) {
+                    if (uniqueValidators[j] != signer) continue;
+                    uniqueFound = true;
+                    break;
+                }
+                if (!uniqueFound) {
+                    uniqueValidators[uniqueValidatorsLength] = signer;
+                    uniqueValidatorsLength++;
+                }
             }
             // first block is block with proof
             if (i == 0) {
@@ -255,7 +260,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
                 parentHash = vbr.blockHash;
             }
         }
-        require(uniqueValidatorsLength >= _confirmationBlocks, "quorum not reached");
+        require(uniqueValidatorsLength >= quorumRequired, "quorum not reached");
         return result;
     }
 

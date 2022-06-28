@@ -1,14 +1,11 @@
-.PHONY: install
-install:
+install: ./package.json ./yarn.lock
 	yarn
 
-.PHONY: test
-test:
+test: ./test
 	yarn test
 
-.PHONY: compile
-compile:
-	yarn compile && node ./scripts/build-abi.js
+compile: ./contracts
+	yarn compile && node ./scripts/build-abi.js && cat ./build/addresses.json
 
 .PHONY: abi
 abi: compile
@@ -16,4 +13,4 @@ abi: compile
 	abigen --abi=./build/abi/RelayHub.json --type=RelayHub --pkg=abigen --lang=go --out=./relayer/abigen/basrelayhub.go
 
 .PHONY: all
-all: install test compile
+all: install compile test
