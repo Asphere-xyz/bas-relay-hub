@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../RelayHub.sol";
 
-import "../verifiers/FakeBlockVerifier.sol";
+import "./FakeBlockVerifier.sol";
 
 contract TestRelayHub is RelayHub {
 

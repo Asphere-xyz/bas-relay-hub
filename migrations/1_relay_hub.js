@@ -5,19 +5,16 @@ const BridgeRouter = artifacts.require("BridgeRouter");
 const CrossChainBridge = artifacts.require("CrossChainBridge");
 
 const UNIT_TEST_CONFIG = {
-  epochLength: 200,
   nativeTokenSymbol: 'TEST',
   nativeTokenName: 'TEST',
 };
 
 const SMART_CHAIN_CONFIG = {
-  epochLength: 200,
   nativeTokenSymbol: 'BNB',
   nativeTokenName: 'BNB',
 };
 
 const BAS_DEVNET_CONFIG = {
-  epochLength: 1200,
   nativeTokenSymbol: 'BAS',
   nativeTokenName: 'BAS',
 };
@@ -51,18 +48,16 @@ module.exports = async (deployer) => {
   const config = BLOCKCHAIN_CONFIG[deployer.network];
   console.log(`Deploying relay hub to the network: ${deployer.network}`);
   if (!config) throw new Error(`There is no config for network: ${deployer.network}`)
-  const {epochLength, nativeTokenSymbol, nativeTokenName} = config;
+  const {nativeTokenSymbol, nativeTokenName} = config;
   console.log(`Network ${deployer.network} config: ${JSON.stringify(config, null, 2)}`);
+
   // deploy parlia block verifier as default verifier, relay hub and other contracts
-  const parliaBlockVerifier = await deployOnlyOnce(deployer, ParliaBlockVerifier, epochLength)
-  const epochInterval = await parliaBlockVerifier.getEpochInterval();
-  if (`${epochInterval}` !== `${epochLength}`) {
-    throw new Error(`Detected bad epoch length: ${epochLength} != ${epochInterval}`)
-  }
+  const parliaBlockVerifier = await deployOnlyOnce(deployer, ParliaBlockVerifier)
   const relayHub = await deployOnlyOnce(deployer, RelayHub, parliaBlockVerifier.address)
   const simpleTokenFactory = await deployOnlyOnce(deployer, SimpleTokenFactory)
   const bridgeRouter = await deployOnlyOnce(deployer, BridgeRouter)
   const crossChainBridge = await deployOnlyOnce(deployer, CrossChainBridge)
+
   // initialize cross bridge
   try {
     await crossChainBridge.initialize(relayHub.address, relayHub.address, simpleTokenFactory.address, bridgeRouter.address, nativeTokenSymbol, nativeTokenName);

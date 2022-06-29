@@ -14,7 +14,7 @@ func injectSigner(chainId *big.Int, privateKey *ecdsa.PrivateKey, opts *bind.Tra
 		opts = &bind.TransactOpts{}
 	}
 	opts.Signer = func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-		return types.SignTx(tx, types.NewLondonSigner(chainId), privateKey)
+		return types.SignTx(tx, types.NewEIP155Signer(chainId), privateKey)
 	}
 	opts.From = crypto.PubkeyToAddress(*privateKey.Public().(*ecdsa.PublicKey))
 	return opts

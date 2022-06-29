@@ -3,11 +3,25 @@ pragma solidity ^0.8.0;
 
 interface IProofVerificationFunction {
 
-    function verifyCheckpointBlock(bytes calldata genesisBlock, uint256 chainId, bytes32 checkpointHash) external view returns (address[] memory initialValidatorSet);
+    function verifyCheckpointBlock(
+        bytes calldata genesisBlock,
+        uint256 chainId,
+        bytes32 checkpointHash,
+        uint32 epochLength
+    ) external view returns (address[] memory initialValidatorSet);
 
-    function verifyGenesisBlock(bytes calldata genesisBlock, uint256 chainId) external view returns (address[] memory initialValidatorSet);
+    function verifyGenesisBlock(
+        bytes calldata genesisBlock,
+        uint256 chainId,
+        uint32 epochLength
+    ) external view returns (address[] memory initialValidatorSet);
 
-    function verifyValidatorTransition(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (address[] memory newValidatorSet, uint64 epochNumber);
+    function verifyValidatorTransition(
+        bytes[] calldata blockProofs,
+        uint256 chainId,
+        address[] calldata existingValidatorSet,
+        uint32 epochLength
+    ) external view returns (address[] memory newValidatorSet, uint64 epochNumber);
 
     struct VerifiedBlock {
         bytes32 blockHash;
@@ -18,5 +32,10 @@ interface IProofVerificationFunction {
         bytes32 receiptRoot;
     }
 
-    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory result);
+    function verifyBlock(
+        bytes[] calldata blockProofs,
+        uint256 chainId,
+        address[] calldata existingValidatorSet,
+        uint32 epochLength
+    ) external view returns (VerifiedBlock memory result);
 }

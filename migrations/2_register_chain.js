@@ -8,8 +8,7 @@ const BINDINGS = [
 ];
 
 const findChainParams = (chainName) => {
-  const {chainId, genesisBlock} = require(`../params/${chainName}.json`);
-  return {chainId, genesisBlock}
+  return require(`../params/${chainName}.json`);
 }
 
 const getContractForNetwork = async (deployer, contractType, networkName) => {
@@ -41,12 +40,12 @@ module.exports = async (deployer) => {
       childRelayHub = await getContractForNetwork(deployer, RelayHub, childChain);
     const rootBridge = await getContractForNetwork(deployer, CrossChainBridge, rootChain),
       childBridge = await getContractForNetwork(deployer, CrossChainBridge, childChain);
-    const {chainId: rootChainId, genesisBlock: rootGenesisBlock} = findChainParams(rootChain),
-      {chainId: childChainId, genesisBlock: childGenesisBlock} = findChainParams(childChain)
+    const rootParams = findChainParams(rootChain),
+      childParams = findChainParams(childChain)
     if (rootChain === deployer.network) {
-      await rootRelayHub.registerCertifiedBAS(childChainId, childGenesisBlock, rootBridge.address);
+      await rootRelayHub.registerCertifiedBAS(childParams.chainId, childParams.genesisBlock, rootBridge.address, childParams.epochLength);
     } else if (childChain === deployer.network) {
-      await childRelayHub.registerCertifiedBAS(rootChainId, rootGenesisBlock, childBridge.address);
+      await childRelayHub.registerCertifiedBAS(rootParams.chainId, rootParams.genesisBlock, childBridge.address, rootParams.epochLength);
     }
   }
 };

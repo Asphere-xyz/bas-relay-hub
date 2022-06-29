@@ -5,8 +5,10 @@ import (
 	"github.com/Ankr-network/bas-relay-hub/relayer/abigen"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"math/big"
 	"time"
@@ -72,6 +74,7 @@ func (s *RelayService) latestBlockFetcher(config *Config, client *ethclient.Clie
 func (s *RelayService) backgroundWorker(config *Config) error {
 	// create stream from root to child
 	go s.epochWorker(s.toNodeConfig(config, true), s.toNodeConfig(config, false))
+	go s.epochWorker(s.toNodeConfig(config, false), s.toNodeConfig(config, true))
 	return nil
 }
 
@@ -96,7 +99,14 @@ func (s *RelayService) toNodeConfig(config *Config, isRoot bool) *nodeConfig {
 	nc.relayHub, _ = abigen.NewRelayHub(common.HexToAddress(chainConfig.RelayHubAddress), nc.client)
 	nc.config = config
 	nc.chainConfig = chainConfig
-	nc.chainId = big.NewInt(int64(chainConfig.ChainId))
+	// make sure chain id is correct
+	chainId, err := nc.client.ChainID(context.TODO())
+	if err != nil {
+		log.WithField("err", err).Fatalf("failed to fetch chain id from node")
+	} else if big.NewInt(int64(chainConfig.ChainId)).Cmp(chainId) != 0 {
+		log.Fatalf("chain id mismatched: %d != %d", chainConfig.ChainId, chainId.Uint64())
+	}
+	nc.chainId = chainId
 	return nc
 }
 
@@ -105,60 +115,138 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 	log.Infof("subscribing to the chain head events")
 	blockNumberChannel := s.latestBlockFetcher(source.config, source.client)
 	log.Infof("listening for incomming events")
-	if source.chainConfig.EpochBlocks == 0 {
+	if source.chainConfig.EpochLength == 0 {
 		log.Fatalf("zero epoch blocks is not possible")
 	}
 	latestTransitionedEpoch, err := target.relayHub.GetLatestTransitionedEpoch(&bind.CallOpts{}, source.chainId)
 	if err != nil {
 		log.Fatalf("failed to fetch latest transitioned epoch: %+v", err)
 	}
-	log.Infof("found latest transitioned epoch: %d", latestTransitionedEpoch)
+	lastProcessTime := time.Now().Unix()
+	var totalProcessedBlocks uint64
+	log.WithField("epoch", latestTransitionedEpoch).Infof("found latest transitioned epoch")
 	for {
 		select {
-		case number := <-blockNumberChannel:
-			waitForBlock := (latestTransitionedEpoch + 1) * source.chainConfig.EpochBlocks
-			log.WithField("block", number).WithField("nextEpochBlock", waitForBlock).WithField("diff", int64(waitForBlock)-int64(number)).Infof("latest block changed for chain")
-			if number < waitForBlock {
+		case latestKnownBlock := <-blockNumberChannel:
+			waitForBlock := (latestTransitionedEpoch + 1) * source.chainConfig.EpochLength
+			log.WithField("block", latestKnownBlock).WithField("nextEpochBlock", waitForBlock).WithField("diff", int64(waitForBlock)-int64(latestKnownBlock)).Debug("latest block changed for chain")
+			if latestKnownBlock < waitForBlock || waitForBlock > latestKnownBlock {
 				continue
 			}
-			log.Infof("epoch %d is reached, doing transition", latestTransitionedEpoch+1)
-			if err := s.createEpochTransition(source, target, waitForBlock); err != nil {
+			log.WithField("epoch", latestTransitionedEpoch+1).Infof("epoch is reached, doing transition")
+			if err := s.createEpochTransition(context.TODO(), source, target, waitForBlock, latestKnownBlock, int64(source.config.GasLimit)); err != nil {
 				log.WithField("err", err).Errorf("failed to create epoch transition")
 				time.Sleep(30 * time.Second)
 				break
 			}
-			latestTransitionedEpoch++
+			prevLatestTransitionedEpoch := latestTransitionedEpoch
+			latestTransitionedEpoch, err = target.relayHub.GetLatestTransitionedEpoch(&bind.CallOpts{}, source.chainId)
+			if err != nil {
+				log.Fatalf("failed to fetch latest transitioned epoch: %+v", err)
+			}
+			processedBlocks := (latestTransitionedEpoch - prevLatestTransitionedEpoch) * source.chainConfig.EpochLength
+			totalProcessedBlocks += processedBlocks
+			blocksPerSecond := int64(totalProcessedBlocks) / (time.Now().Unix() - lastProcessTime)
+			estimateTime := int64(latestKnownBlock-latestTransitionedEpoch*source.chainConfig.EpochLength) / blocksPerSecond
+			log.WithField("tps", blocksPerSecond).WithField("eta", prettyFormatTime(estimateTime)).Info("chain epochs synchronization stats")
 		}
 	}
 }
 
-func (s *RelayService) createEpochTransition(source, target *nodeConfig, epochBlock uint64) error {
+func (s *RelayService) createBlockProofs(ctx context.Context, client *ethclient.Client, atBlock, epochLength uint64) ([][]byte, error) {
+	prevEpochBlock, err := client.BlockByNumber(ctx, big.NewInt(int64(atBlock-epochLength)))
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't fetch prev epoch block (%d)", atBlock-epochLength)
+	}
+	prevEpochValidators, err := extractParliaValidators(prevEpochBlock.Header())
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to extract parlia block validators")
+	}
+	confirmations := len(prevEpochValidators) * 2 / 3
 	var blockProofs [][]byte
-	for i := epochBlock; i < epochBlock+source.config.ConfirmationBlocks; i++ {
-		block, err := source.client.BlockByNumber(context.TODO(), big.NewInt(int64(i)))
+	for i := atBlock; i < atBlock+uint64(confirmations); i++ {
+		block, err := client.BlockByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
-			return err
+			return nil, errors.Wrapf(err, "can't fetch fetch block (%d)", i)
 		}
 		blockRlp, err := rlp.EncodeToBytes(block.Header())
 		if err != nil {
-			return err
+			return nil, errors.Wrapf(err, "rlp encode failed")
 		}
-		//println(hexutil.Encode(blockRlp))
 		blockProofs = append(blockProofs, blockRlp)
 	}
+	return blockProofs, nil
+}
+
+func (s *RelayService) createEpochTransition(ctx context.Context, source, target *nodeConfig, epochBlock, latestKnownBlock uint64, gasLimit int64) (err error) {
 	opts := injectSigner(target.chainId, source.config.Relayer.PrivateKey, nil)
+	opts.Context = ctx
 	log.WithFields(logrus.Fields{
 		"source":     source.chainConfig.ChainName,
 		"target":     target.chainConfig.ChainName,
 		"epochBlock": epochBlock,
 		"from":       opts.From.Hex(),
 	}).Infof("executing epoch transition")
-	tx, err := target.relayHub.UpdateValidatorSet(opts, source.chainId, blockProofs)
-	if err != nil {
-		return err
+	var tx *types.Transaction
+	batchSize := 1
+	if gasLimit > 0 {
+		var inputs [][]byte
+		// estimate gas consumption
+		blockProofs, err := s.createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
+		if err != nil {
+			return err
+		}
+		opts.NoSend = true
+		tx, err = target.relayHub.UpdateValidatorSet(opts, source.chainId, blockProofs)
+		if err != nil {
+			return errors.Wrapf(err, "failed to update validator set")
+		}
+		opts.NoSend = false
+		estimateGasUsage := tx.Gas()
+		const txGasReserve = 100_000
+		const txMaxInput = 100 * 1024
+		batchSize = int(gasLimit-txGasReserve) / int(estimateGasUsage)
+		inputSize := 0
+		// create batch
+		for bs := 0; bs < batchSize; bs++ {
+			batchEpochBlock := epochBlock + uint64(bs)*source.chainConfig.EpochLength
+			if batchEpochBlock > latestKnownBlock {
+				break
+			}
+			blockProofs, err := s.createBlockProofs(ctx, source.client, batchEpochBlock, source.chainConfig.EpochLength)
+			if err != nil {
+				return err
+			}
+			input := encodeFunctionCall("updateValidatorSet(uint256,bytes[])", source.chainId, blockProofs)
+			// transaction has max size
+			if len(input)+inputSize > txMaxInput {
+				batchSize = bs
+				break
+			}
+			inputSize += len(input)
+			inputs = append(inputs, input)
+		}
+		tx, err = target.relayHub.Multicall(opts, inputs)
+		if err != nil {
+			return errors.Wrapf(err, "failed to do multicall")
+		}
+	} else {
+		blockProofs, err := s.createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
+		if err != nil {
+			return err
+		}
+		tx, err = target.relayHub.UpdateValidatorSet(opts, source.chainId, blockProofs)
+		if err != nil {
+			return errors.Wrapf(err, "failed to update validator set")
+		}
 	}
-	log.WithField("chain", target.chainConfig.ChainName).WithField("hash", tx.Hash().Hex()).Infof("updated validator set")
-	return nil
+	log.WithFields(logrus.Fields{
+		"chain":     target.chainConfig.ChainName,
+		"hash":      tx.Hash().Hex(),
+		"batchSize": batchSize,
+		"gasUsed":   tx.Gas(),
+	}).Infof("updated validator set")
+	return waitTxToBeMined(ctx, target.client, tx.Hash())
 }
 
 func (s *RelayService) Stop() error {

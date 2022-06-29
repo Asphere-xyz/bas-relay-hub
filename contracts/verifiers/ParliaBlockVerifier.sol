@@ -9,18 +9,8 @@ import "../libraries/RLP.sol";
 
 contract ParliaBlockVerifier is IProofVerificationFunction {
 
-    uint32 internal immutable _epochInterval;
-
-    constructor(uint32 epochInterval) {
-        _epochInterval = epochInterval;
-    }
-
-    function getEpochInterval() external view returns (uint32) {
-        return _epochInterval;
-    }
-
-    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId) external view returns (VerifiedParliaBlockResult memory result) {
-        return _extractParliaSigningData(blockProof, chainId);
+    function extractParliaSigningData(bytes calldata blockProof, uint256 chainId, uint32 epochLength) external view returns (VerifiedParliaBlockResult memory result) {
+        return _extractParliaSigningData(blockProof, chainId, epochLength);
     }
 
     struct VerifiedParliaBlockResult {
@@ -32,7 +22,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         bytes signature;
     }
 
-    function _extractParliaSigningData(bytes calldata blockProof, uint256 chainId) internal virtual view returns (VerifiedParliaBlockResult memory result) {
+    function _extractParliaSigningData(bytes calldata blockProof, uint256 chainId, uint32 epochLength) internal virtual view returns (VerifiedParliaBlockResult memory result) {
         // support of >64 kB headers might make code much more complicated and such blocks doesn't exist
         require(blockProof.length <= 65535);
         // open RLP and calc block header length after the prefix (it should be block proof length -3)
@@ -140,7 +130,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             result.coinbase = ECDSA.recover(keccak256(signingData), signature);
         }
         // parse validators for zero block epoch
-        if (result.blockNumber % _epochInterval == 0) {
+        if (result.blockNumber % epochLength == 0) {
             uint256 totalValidators = (afterExtraDataOffset - beforeExtraDataOffset + oldExtraDataPrefixLength - 65 - 32) / 20;
             address[] memory newValidators = new address[](totalValidators);
             for (uint256 i = 0; i < totalValidators; i++) {
@@ -157,19 +147,33 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         return result;
     }
 
-    function verifyCheckpointBlock(bytes calldata genesisBlock, uint256 chainId, bytes32 checkpointHash) external view override returns (address[] memory initialValidatorSet) {
-        VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId);
+    function verifyCheckpointBlock(
+        bytes calldata genesisBlock,
+        uint256 chainId,
+        bytes32 checkpointHash,
+        uint32 epochLength
+    ) external view override returns (address[] memory initialValidatorSet) {
+        VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId, epochLength);
         require(result.blockHash == checkpointHash, "not a checkpoint block");
         return result.validators;
     }
 
-    function verifyGenesisBlock(bytes calldata genesisBlock, uint256 chainId) external view override returns (address[] memory initialValidatorSet) {
-        VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId);
+    function verifyGenesisBlock(
+        bytes calldata genesisBlock,
+        uint256 chainId,
+        uint32 epochLength
+    ) external view override returns (address[] memory initialValidatorSet) {
+        VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId, epochLength);
         require(result.blockNumber == 0, "not a genesis block");
         return result.validators;
     }
 
-    function verifyValidatorTransition(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (address[] memory newValidatorSet, uint64 epochNumber) {
+    function verifyValidatorTransition(
+        bytes[] calldata blockProofs,
+        uint256 chainId,
+        address[] calldata existingValidatorSet,
+        uint32 epochLength
+    ) external view returns (address[] memory newValidatorSet, uint64 epochNumber) {
         uint256 quorumRequired = existingValidatorSet.length * 2 / 3;
         require(blockProofs.length >= quorumRequired, "not enough proofs");
         bytes32 parentHash;
@@ -178,7 +182,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         uint64 uniqueValidatorsLength = 0;
         // check all blocks
         for (uint256 i = 0; i < blockProofs.length; i++) {
-            VerifiedParliaBlockResult memory result = _extractParliaSigningData(blockProofs[i], chainId);
+            VerifiedParliaBlockResult memory result = _extractParliaSigningData(blockProofs[i], chainId, epochLength);
             address signer = result.coinbase;
             // make sure signer exists (we should know validator order, it can be optimized)
             bool signerFound = false;
@@ -200,9 +204,8 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
             }
             // first block must be epoch block
             if (i == 0) {
-                uint32 epochInterval = _epochInterval;
-                require(result.blockNumber % epochInterval == 0, "epoch block");
-                epochNumber = result.blockNumber / epochInterval;
+                require(result.blockNumber % epochLength == 0, "epoch block");
+                epochNumber = result.blockNumber / epochLength;
                 newValidatorSet = result.validators;
                 parentHash = result.blockHash;
             } else {
@@ -214,7 +217,12 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         return (newValidatorSet, epochNumber);
     }
 
-    function verifyBlock(bytes[] calldata blockProofs, uint256 chainId, address[] calldata existingValidatorSet) external view returns (VerifiedBlock memory result) {
+    function verifyBlock(
+        bytes[] calldata blockProofs,
+        uint256 chainId,
+        address[] calldata existingValidatorSet,
+        uint32 epochLength
+) external view returns (VerifiedBlock memory result) {
         uint256 quorumRequired = existingValidatorSet.length * 2 / 3;
         require(blockProofs.length >= quorumRequired, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached
@@ -223,7 +231,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         // check all blocks
         bytes32 parentHash;
         for (uint256 i = 0; i < blockProofs.length; i++) {
-            VerifiedParliaBlockResult memory vbr = _extractParliaSigningData(blockProofs[i], chainId);
+            VerifiedParliaBlockResult memory vbr = _extractParliaSigningData(blockProofs[i], chainId, epochLength);
             address signer = vbr.coinbase;
             // make sure signer exists (we should know validator order, it can be optimized)
             {

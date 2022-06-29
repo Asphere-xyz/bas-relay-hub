@@ -5,12 +5,9 @@ import "../verifiers/ParliaBlockVerifier.sol";
 
 contract VerifierGasMeasurer is ParliaBlockVerifier {
 
-    constructor() ParliaBlockVerifier(200) {
-    }
-
     function measureVerifyGas(bytes calldata blockProof, uint256 chainId) external view returns (uint64 gasUsed) {
         gasUsed = uint64(gasleft());
-        _extractParliaSigningData(blockProof, chainId);
+        _extractParliaSigningData(blockProof, chainId, 200);
         return gasUsed - uint64(gasleft());
     }
 }

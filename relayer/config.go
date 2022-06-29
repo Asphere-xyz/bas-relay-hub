@@ -11,7 +11,7 @@ type ChainConfig struct {
 	RpcUrl          string
 	RelayHubAddress string
 	ChainId         uint64
-	EpochBlocks     uint64
+	EpochLength     uint64
 }
 
 type RelayerConfig struct {
@@ -24,6 +24,7 @@ type Config struct {
 	Relayer RelayerConfig
 
 	ConfirmationBlocks uint64
+	GasLimit           uint64
 }
 
 func ConfigFromViper(viper *viper.Viper) *Config {
@@ -33,19 +34,20 @@ func ConfigFromViper(viper *viper.Viper) *Config {
 			RpcUrl:          viper.GetString("root.rpc-url"),
 			RelayHubAddress: viper.GetString("root.relay-hub-address"),
 			ChainId:         viper.GetUint64("root.chain-id"),
-			EpochBlocks:     viper.GetUint64("root.epoch-blocks"),
+			EpochLength:     viper.GetUint64("root.epoch-blocks"),
 		},
 		Child: ChainConfig{
 			ChainName:       viper.GetString("child.chain-name"),
 			RpcUrl:          viper.GetString("child.rpc-url"),
 			RelayHubAddress: viper.GetString("child.relay-hub-address"),
 			ChainId:         viper.GetUint64("child.chain-id"),
-			EpochBlocks:     viper.GetUint64("child.epoch-blocks"),
+			EpochLength:     viper.GetUint64("child.epoch-blocks"),
 		},
 		Relayer: RelayerConfig{
 			PrivateKey: must(crypto.HexToECDSA(viper.GetString("relayer.private-key"))),
 		},
 		ConfirmationBlocks: viper.GetUint64("confirmation-blocks"),
+		GasLimit:           viper.GetUint64("gas-limit"),
 	}
 	return config
 }

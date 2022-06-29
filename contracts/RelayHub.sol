@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
+import "@openzeppelin/contracts/utils/Multicall.sol";
 
 import "./interfaces/IProofVerificationFunction.sol";
 import "./interfaces/IRelayHub.sol";
@@ -12,7 +13,9 @@ import "./interfaces/IBridgeRegistry.sol";
 import "./libraries/BitUtils.sol";
 import "./libraries/MerklePatriciaProof.sol";
 
-contract RelayHub is IRelayHub, IBridgeRegistry {
+import "./BlockVerifierFactory.sol";
+
+contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
 
     using EnumerableSet for EnumerableSet.AddressSet;
     using BitMaps for BitMaps.BitMap;
@@ -45,6 +48,7 @@ contract RelayHub is IRelayHub, IBridgeRegistry {
         ChainStatus chainStatus;
         IProofVerificationFunction verificationFunction;
         address bridgeAddress;
+        uint32 epochLength;
     }
 
     // default verification function for certified chains
@@ -65,9 +69,10 @@ contract RelayHub is IRelayHub, IBridgeRegistry {
     function registerCertifiedBAS(
         uint256 chainId,
         bytes calldata genesisBlock,
-        address bridgeAddress
+        address bridgeAddress,
+        uint32 epochLength
     ) external {
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying, bridgeAddress);
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying, bridgeAddress, epochLength);
     }
 
     function registerUsingCheckpoint(
@@ -75,19 +80,21 @@ contract RelayHub is IRelayHub, IBridgeRegistry {
         bytes calldata checkpointBlock,
         bytes32 checkpointHash,
         bytes calldata checkpointSignature,
-        address bridgeAddress
+        address bridgeAddress,
+        uint32 epochLength
     ) external {
         require(ECDSA.recover(keccak256(abi.encode(chainId, checkpointHash)), checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
-        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash, ChainStatus.Verifying, bridgeAddress);
+        _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash, ChainStatus.Verifying, bridgeAddress, epochLength);
     }
 
     function registerBAS(
         uint256 chainId,
         IProofVerificationFunction verificationFunction,
         bytes calldata genesisBlock,
-        address bridgeAddress
+        address bridgeAddress,
+        uint32 epochLength
     ) external {
-        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying, bridgeAddress);
+        _registerChainWithVerificationFunction(chainId, verificationFunction, genesisBlock, ZERO_BLOCK_HASH, ChainStatus.Verifying, bridgeAddress, epochLength);
     }
 
     function _registerChainWithVerificationFunction(
@@ -96,19 +103,21 @@ contract RelayHub is IRelayHub, IBridgeRegistry {
         bytes calldata blockProof,
         bytes32 checkpointHash,
         ChainStatus defaultStatus,
-        address bridgeAddress
+        address bridgeAddress,
+        uint32 epochLength
     ) internal {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
         address[] memory initialValidatorSet;
         if (checkpointHash == ZERO_BLOCK_HASH) {
-            initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(blockProof, chainId);
+            initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(blockProof, chainId, epochLength);
         } else {
-            initialValidatorSet = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash);
+            initialValidatorSet = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash, epochLength);
         }
         bas.chainStatus = defaultStatus;
         bas.verificationFunction = verificationFunction;
         bas.bridgeAddress = bridgeAddress;
+        bas.epochLength = epochLength;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
         _updateActiveValidatorSet(validatorHistory, initialValidatorSet, 0);
         _registeredChains[chainId] = bas;
@@ -181,7 +190,7 @@ contract RelayHub is IRelayHub, IBridgeRegistry {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.Verifying || bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        (address[] memory newValidatorSet, uint64 epochNumber) = _verificationFunction(bas.verificationFunction).verifyValidatorTransition(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
+        (address[] memory newValidatorSet, uint64 epochNumber) = _verificationFunction(bas.verificationFunction).verifyValidatorTransition(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch), bas.epochLength);
         require(epochNumber == validatorHistory.latestKnownEpoch + 1, "bad epoch");
         bas.chainStatus = ChainStatus.Active;
         _updateActiveValidatorSet(validatorHistory, newValidatorSet, epochNumber);
@@ -193,7 +202,7 @@ contract RelayHub is IRelayHub, IBridgeRegistry {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch));
+        IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch), bas.epochLength);
         return MerklePatriciaProof.verify(keccak256(rawReceipt), path, siblings, verifiedBlock.receiptRoot);
     }
 
