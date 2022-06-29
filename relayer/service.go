@@ -147,8 +147,11 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 			processedBlocks := (latestTransitionedEpoch - prevLatestTransitionedEpoch) * source.chainConfig.EpochLength
 			totalProcessedBlocks += processedBlocks
 			blocksPerSecond := int64(totalProcessedBlocks) / (time.Now().Unix() - lastProcessTime)
+			if blocksPerSecond == 0 {
+				continue
+			}
 			estimateTime := int64(latestKnownBlock-latestTransitionedEpoch*source.chainConfig.EpochLength) / blocksPerSecond
-			log.WithField("tps", blocksPerSecond).WithField("eta", prettyFormatTime(estimateTime)).Info("chain epochs synchronization stats")
+			log.WithField("bps", blocksPerSecond).WithField("eta", prettyFormatTime(estimateTime)).Info("chain epochs synchronization stats")
 		}
 	}
 }
@@ -162,9 +165,9 @@ func (s *RelayService) createBlockProofs(ctx context.Context, client *ethclient.
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to extract parlia block validators")
 	}
-	confirmations := len(prevEpochValidators) * 2 / 3
+	uniqueSigners := make(map[common.Address]bool)
 	var blockProofs [][]byte
-	for i := atBlock; i < atBlock+uint64(confirmations); i++ {
+	for i := atBlock; i < atBlock+uint64(len(prevEpochValidators)); i++ {
 		block, err := client.BlockByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
 			return nil, errors.Wrapf(err, "can't fetch fetch block (%d)", i)
@@ -174,6 +177,11 @@ func (s *RelayService) createBlockProofs(ctx context.Context, client *ethclient.
 			return nil, errors.Wrapf(err, "rlp encode failed")
 		}
 		blockProofs = append(blockProofs, blockRlp)
+		// make sure quorum is reached
+		uniqueSigners[block.Header().Coinbase] = true
+		if len(uniqueSigners) >= len(prevEpochValidators)*2/3 {
+			break
+		}
 	}
 	return blockProofs, nil
 }

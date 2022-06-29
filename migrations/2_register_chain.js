@@ -43,9 +43,9 @@ module.exports = async (deployer) => {
     const rootParams = findChainParams(rootChain),
       childParams = findChainParams(childChain)
     if (rootChain === deployer.network) {
-      await rootRelayHub.registerCertifiedBAS(childParams.chainId, childParams.genesisBlock, rootBridge.address, childParams.epochLength);
+      await rootRelayHub.registerCertifiedBAS(childParams.chainId, childParams.genesisBlock, childBridge.address, childParams.epochLength);
     } else if (childChain === deployer.network) {
-      await childRelayHub.registerCertifiedBAS(rootParams.chainId, rootParams.genesisBlock, childBridge.address, rootParams.epochLength);
+      await childRelayHub.registerCertifiedBAS(rootParams.chainId, rootParams.genesisBlock, rootBridge.address, rootParams.epochLength);
     }
   }
 };

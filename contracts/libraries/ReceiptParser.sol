@@ -49,11 +49,11 @@ library ReceiptParser {
         uint256 iter = RLP.beginIteration(receiptOffset);
         {
             // postStateOrStatus - we must ensure that tx is not reverted
-            uint256 statusOffset = iter;
+            require(RLP.toUint256(iter, 1) == 0x01, "tx is reverted");
             iter = RLP.next(iter);
-            require(RLP.payloadLen(statusOffset, iter - statusOffset) == 1, "tx is reverted");
         }
         // skip cumulativeGasUsed
+        iter = RLP.next(iter);
         iter = RLP.next(iter);
         // logs - we need to find our logs
         uint256 logs = iter;
@@ -108,7 +108,8 @@ library ReceiptParser {
             topicsIter = RLP.next(topicsIter);
             toAddress = address(bytes20(uint160(RLP.toUintStrict(topicsIter))));
             topicsIter = RLP.next(topicsIter);
-            require(topicsIter == logIter); // safety check that iteration is finished
+            require(topicsIter == logIter);
+            // safety check that iteration is finished
         }
 
         uint256 ptr = RLP.rawDataPtr(logIter);
@@ -148,7 +149,7 @@ library ReceiptParser {
         {
             uint256 structOffset;
             assembly {
-                // skip 5 fields: receiptHash, contractAddress, chainId, fromAddress, toAddress
+            // skip 5 fields: receiptHash, contractAddress, chainId, fromAddress, toAddress
                 structOffset := add(state, 0xa0)
                 calldatacopy(structOffset, ptr, len)
             }

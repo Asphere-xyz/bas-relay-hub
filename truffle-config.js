@@ -56,7 +56,7 @@ module.exports = {
         privateKeys: [
           deployerPrivateKey,
         ],
-        providerOrUrl: "https://data-seed-prebsc-1-s1.binance.org:8545/",
+        providerOrUrl: "https://tokyo-maxihost-199-254-199-141.ankr.com/bsc_testnet_full_rpc_1",
         chainId: 97,
       }),
       network_id: "*",

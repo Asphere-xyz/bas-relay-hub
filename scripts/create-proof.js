@@ -2,6 +2,7 @@ const {BaseTrie} = require('merkle-patricia-tree'),
   Web3 = require('web3');
 const {hexToNumber, numberToHex} = require("web3-utils"),
   {rlp, toBuffer} = require("ethereumjs-util");
+const {blockToRlp} = require("./common");
 
 const sendJsonRpcRequest = async (web3, data) => {
   return new Promise((resolve, reject) => {
@@ -41,9 +42,14 @@ const getReceiptBytes = (receipt) => {
 }
 
 const main = async () => {
+  const [, , rpcUrl, txHash] = process.argv
+  if (!rpcUrl || !txHash) {
+    return console.error(`Node url and transaction hash params are not specified`)
+  }
 
-  const web3 = new Web3('https://rpc.ankr.com/bsc');
-  const block = await web3.eth.getBlock('1')
+  const web3 = new Web3(rpcUrl);
+  const receipt = await web3.eth.getTransactionReceipt(txHash)
+  const block = await web3.eth.getBlock(receipt.blockNumber)
 
   console.log(`Receipts Root: ${block.receiptsRoot}`);
   console.log(`State Root: ${block.stateRoot}`);
@@ -59,8 +65,7 @@ const main = async () => {
     if (!r.type) r.type = 0
     return r
   })
-  const receiptWithBurn = receipts[receipts.length - 1],
-    receiptWithBurnKey = rlp.encode(hexToNumber(receiptWithBurn.transactionIndex));
+  const receiptKey = rlp.encode(hexToNumber(receipt.transactionIndex));
 
   // build receipt trie
   const trie = new BaseTrie();
@@ -69,7 +74,7 @@ const main = async () => {
       data = getReceiptBytes(receipt);
     await trie.put(path, data)
   }
-  const foundPath = await trie.findPath(receiptWithBurnKey, true)
+  const foundPath = await trie.findPath(receiptKey, true)
   if (foundPath.remaining > 0) {
     throw new Error(`Can't find node in the trie`)
   }
@@ -77,14 +82,22 @@ const main = async () => {
     throw new Error(`Incorrect receipts root: ${trie.root.toString('hex')} != ${block.receiptsRoot.substr(2)}`)
   }
 
+  // create some block proofs
+  let blockProofs = [blockToRlp(block).toString('hex')];
+  for (let i = 1; i < 5; i++) {
+    const nextBlock = await web3.eth.getBlock(block.number+i)
+    blockProofs.push(blockToRlp(nextBlock).toString('hex'));
+  }
+
   // create proof
   const proof = {
-    blockHash: receiptWithBurn.blockHash,
+    blockProofs: blockProofs,
+    blockHash: receipt.blockHash,
     parentNodes: '0x' + rlp.encode(foundPath.stack.map(s => s.raw())).toString('hex'),
     root: '0x' + trie.root.toString('hex'),
-    path: '0x' + Buffer.concat([Buffer.from('00', 'hex'), receiptWithBurnKey]).toString('hex'),
+    path: '0x' + Buffer.concat([Buffer.from('00', 'hex'), receiptKey]).toString('hex'),
   };
-  if (isTypedReceipt(receiptWithBurn)) {
+  if (isTypedReceipt(receipt)) {
     proof.value = '0x' + foundPath.node.value.toString('hex');
   } else {
     proof.value = '0x' + foundPath.node.value.toString('hex');
@@ -99,10 +112,4 @@ const main = async () => {
   console.log();
 };
 
-(async () => {
-  try {
-    await main();
-  } catch (e) {
-    console.error(e)
-  }
-})();
+main().catch(console.error)

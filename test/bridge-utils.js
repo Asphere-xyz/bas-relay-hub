@@ -114,16 +114,17 @@ function encodeTransactionReceipt(txReceipt) {
   });
   const rlpReceipt = [
     // postStateOrStatus
-    [Number(txReceipt.status)],
+    Number(txReceipt.status),
     // cumulativeGasUsed
     Web3.utils.numberToHex(txReceipt.gasUsed),
     // bloom
-    // txReceipt.logsBloom,
+    txReceipt.logsBloom,
     // logs
     rlpLogs,
   ];
   const encodedReceipt = rlp.encode(rlpReceipt),
     receiptHash = eth.keccak256(encodedReceipt);
+  console.log(`0x${encodedReceipt.toString('hex')}`)
   return [`0x${encodedReceipt.toString('hex')}`, `0x${receiptHash.toString('hex')}`];
 }
 

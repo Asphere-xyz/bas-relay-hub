@@ -2,6 +2,7 @@ const Web3 = require('web3');
 const {numberToHex, padLeft} = require("web3-utils"),
   {rlp, toBuffer} = require("ethereumjs-util");
 const fs = require('fs');
+const {blockToRlp} = require("./common");
 
 const PARLIA_DEFAULT_EPOCH_LENGTH = 200;
 
@@ -9,23 +10,7 @@ const createChainParams = async (rpcUrl, targetFile) => {
   const web3 = new Web3(rpcUrl);
   const chainId = await web3.eth.getChainId(),
     genesisBlock = await web3.eth.getBlock('0')
-  const rawBlock = rlp.encode([
-    toBuffer(genesisBlock.parentHash),
-    toBuffer(genesisBlock.sha3Uncles),
-    toBuffer(genesisBlock.miner),
-    toBuffer(genesisBlock.stateRoot),
-    toBuffer(genesisBlock.transactionsRoot),
-    toBuffer(genesisBlock.receiptsRoot),
-    toBuffer(genesisBlock.logsBloom),
-    Number(genesisBlock.difficulty),
-    Number(genesisBlock.number),
-    Number(genesisBlock.gasLimit),
-    Number(genesisBlock.gasUsed),
-    Number(genesisBlock.timestamp),
-    toBuffer(genesisBlock.extraData),
-    toBuffer(genesisBlock.mixHash),
-    padLeft(genesisBlock.nonce, 8),
-  ])
+  const rawGenesisBlock = blockToRlp(genesisBlock)
   let epochLength = PARLIA_DEFAULT_EPOCH_LENGTH
   const rawEpochLength = await web3.eth.call({
     // chain config contract
@@ -37,12 +22,12 @@ const createChainParams = async (rpcUrl, targetFile) => {
     epochLength = Number.parseInt(rawEpochLength, 16)
   }
   console.log(`Hex chain id: ${numberToHex(chainId)}`);
-  console.log(`Raw genesis block: 0x${rawBlock.toString('hex')}`)
+  console.log(`Raw genesis block: 0x${rawGenesisBlock.toString('hex')}`)
   if (targetFile) {
     console.log(`Dumping chain params to file: ${targetFile}`);
     fs.writeFileSync(targetFile, JSON.stringify({
       chainId: numberToHex(chainId),
-      genesisBlock: `0x${rawBlock.toString('hex')}`,
+      genesisBlock: `0x${rawGenesisBlock.toString('hex')}`,
       epochLength: epochLength,
     }, null, 2));
   }

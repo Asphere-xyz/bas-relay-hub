@@ -237,9 +237,9 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
         (ReceiptParser.State memory state, ReceiptParser.PegInType pegInType) = ReceiptParser.parseTransactionReceipt(rawReceipt);
         require(state.chainId == block.chainid, "receipt points to another chain");
         // verify provided block proof
-        require(_basRelayHub.checkReceiptProof(state.chainId, blockProofs, rawReceipt, proofPath, proofSiblings), "bad proof");
+        require(_basRelayHub.checkReceiptProof(state.originChain, blockProofs, rawReceipt, proofPath, proofSiblings), "bad proof");
         // make sure origin contract is allowed
-        require(_bridgeRegistry.getBridgeAddress(state.chainId) == state.contractAddress, "event from not allowed contract");
+        require(_bridgeRegistry.getBridgeAddress(state.originChain) == state.contractAddress, "event from not allowed contract");
         // withdraw funds to recipient
         _withdraw(state, pegInType, state.receiptHash);
     }
