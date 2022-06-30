@@ -8,7 +8,7 @@ interface IProofVerificationFunction {
         uint256 chainId,
         bytes32 checkpointHash,
         uint32 epochLength
-    ) external view returns (address[] memory initialValidatorSet);
+    ) external view returns (address[] memory initialValidatorSet, uint64 epochNumber);
 
     function verifyGenesisBlock(
         bytes calldata genesisBlock,

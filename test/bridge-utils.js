@@ -124,7 +124,6 @@ function encodeTransactionReceipt(txReceipt) {
   ];
   const encodedReceipt = rlp.encode(rlpReceipt),
     receiptHash = eth.keccak256(encodedReceipt);
-  console.log(`0x${encodedReceipt.toString('hex')}`)
   return [`0x${encodedReceipt.toString('hex')}`, `0x${receiptHash.toString('hex')}`];
 }
 

@@ -107,17 +107,18 @@ contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
         address[] memory initialValidatorSet;
+        uint64 epochNumber = 0;
         if (checkpointHash == ZERO_BLOCK_HASH) {
             initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(blockProof, chainId, epochLength);
         } else {
-            initialValidatorSet = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash, epochLength);
+            (initialValidatorSet, epochNumber) = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash, epochLength);
         }
         bas.chainStatus = defaultStatus;
         bas.verificationFunction = verificationFunction;
         bas.bridgeAddress = bridgeAddress;
         bas.epochLength = epochLength;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        _updateActiveValidatorSet(validatorHistory, initialValidatorSet, 0);
+        _updateActiveValidatorSet(validatorHistory, initialValidatorSet, epochNumber);
         _registeredChains[chainId] = bas;
         emit ChainRegistered(chainId, initialValidatorSet);
     }

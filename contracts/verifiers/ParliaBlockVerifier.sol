@@ -152,10 +152,10 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         uint256 chainId,
         bytes32 checkpointHash,
         uint32 epochLength
-    ) external view override returns (address[] memory initialValidatorSet) {
+    ) external view override returns (address[] memory initialValidatorSet, uint64 epochNumber) {
         VerifiedParliaBlockResult memory result = _extractParliaSigningData(genesisBlock, chainId, epochLength);
         require(result.blockHash == checkpointHash, "not a checkpoint block");
-        return result.validators;
+        return (result.validators, result.blockNumber / epochLength);
     }
 
     function verifyGenesisBlock(
