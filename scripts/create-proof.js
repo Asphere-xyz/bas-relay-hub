@@ -75,7 +75,7 @@ const main = async () => {
     await trie.put(path, data)
   }
   const foundPath = await trie.findPath(receiptKey, true)
-  if (foundPath.remaining > 0) {
+  if (foundPath.remaining.length > 0) {
     throw new Error(`Can't find node in the trie`)
   }
   if (trie.root.toString('hex') !== block.receiptsRoot.substr(2)) {

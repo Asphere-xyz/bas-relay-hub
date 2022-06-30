@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/Ankr-network/bas-relay-hub/relayer/abigen"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -166,8 +167,9 @@ func (s *RelayService) createBlockProofs(ctx context.Context, client *ethclient.
 		return nil, errors.Wrapf(err, "failed to extract parlia block validators")
 	}
 	uniqueSigners := make(map[common.Address]bool)
+	quorumRequired := len(prevEpochValidators) * 2 / 3
 	var blockProofs [][]byte
-	for i := atBlock; i < atBlock+uint64(len(prevEpochValidators)); i++ {
+	for i := atBlock; i < atBlock+epochLength; i++ {
 		block, err := client.BlockByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
 			return nil, errors.Wrapf(err, "can't fetch fetch block (%d)", i)
@@ -179,9 +181,12 @@ func (s *RelayService) createBlockProofs(ctx context.Context, client *ethclient.
 		blockProofs = append(blockProofs, blockRlp)
 		// make sure quorum is reached
 		uniqueSigners[block.Header().Coinbase] = true
-		if len(uniqueSigners) >= len(prevEpochValidators)*2/3 {
+		if len(uniqueSigners) >= quorumRequired {
 			break
 		}
+	}
+	if len(uniqueSigners) < quorumRequired {
+		return nil, fmt.Errorf("failed to reach quorum for epoch block %d, reached only %d/%d", atBlock, len(uniqueSigners), quorumRequired)
 	}
 	return blockProofs, nil
 }

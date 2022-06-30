@@ -222,7 +222,7 @@ contract ParliaBlockVerifier is IProofVerificationFunction {
         uint256 chainId,
         address[] calldata existingValidatorSet,
         uint32 epochLength
-) external view returns (VerifiedBlock memory result) {
+    ) external view returns (VerifiedBlock memory result) {
         uint256 quorumRequired = existingValidatorSet.length * 2 / 3;
         require(blockProofs.length >= quorumRequired, "not enough proofs");
         // we must store somehow set of active validators to check is quorum reached

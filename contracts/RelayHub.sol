@@ -79,11 +79,9 @@ contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
         uint256 chainId,
         bytes calldata checkpointBlock,
         bytes32 checkpointHash,
-        bytes calldata checkpointSignature,
         address bridgeAddress,
         uint32 epochLength
     ) external {
-        require(ECDSA.recover(keccak256(abi.encode(chainId, checkpointHash)), checkpointSignature) == _checkpointOracle, "bad checkpoint signature");
         _registerChainWithVerificationFunction(chainId, DEFAULT_VERIFICATION_FUNCTION, checkpointBlock, checkpointHash, ChainStatus.Verifying, bridgeAddress, epochLength);
     }
 
