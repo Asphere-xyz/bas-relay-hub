@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.6;
 
-import "@openzeppelin/contracts/utils/Strings.sol";
-
 import "../interfaces/ICrossChainBridge.sol";
 
 import "./RLP.sol";
 
 library ReceiptParser {
 
-    bytes32 constant TOPIC_PEG_IN_LOCKED = keccak256("DepositLocked(uint256,address,address,address,address,uint256,(bytes32,bytes32,uint256,address))");
-    bytes32 constant TOPIC_PEG_IN_BURNED = keccak256("DepositBurned(uint256,address,address,address,address,uint256,(bytes32,bytes32,uint256,address),address)");
+    bytes32 constant TOPIC_PEG_IN_LOCKED = keccak256("DepositLocked(uint256,address,address,address,address,uint256,uint256,(bytes32,bytes32,uint256,address))");
+    bytes32 constant TOPIC_PEG_IN_BURNED = keccak256("DepositBurned(uint256,address,address,address,address,uint256,uint256,(bytes32,bytes32,uint256,address))");
 
     enum PegInType {
         None,
@@ -19,26 +17,28 @@ library ReceiptParser {
     }
 
     struct State {
+        // distance between these fields and metadata is 0x120 bytes
         bytes32 receiptHash;
         address contractAddress;
         uint256 chainId;
         address fromAddress;
-        address payable toAddress;
+        address toAddress;
+        // these fields must have the same order as deposit event
         address fromToken;
         address toToken;
         uint256 totalAmount;
+        uint256 nonce;
         // metadata fields (we can't use Metadata struct here because of Solidity struct memory layout)
-        bytes32 symbol;
-        bytes32 name;
+        bytes32 originSymbol;
+        bytes32 originName;
         uint256 originChain;
-        address originAddress;
         address originToken;
     }
 
     function getMetadata(State memory state) internal pure returns (ICrossChainBridge.Metadata memory) {
         ICrossChainBridge.Metadata memory metadata;
         assembly {
-            metadata := add(state, 0x100)
+            metadata := add(state, 0x120)
         }
         return metadata;
     }
@@ -116,18 +116,16 @@ library ReceiptParser {
         logIter = RLP.next(logIter);
         uint256 len = logIter - ptr;
         {
-            // parse logs based on topic type and check that event data has correct length
-            uint256 expectedLen;
-            if (mainTopic == TOPIC_PEG_IN_LOCKED) {
-                expectedLen = 0x100;
-                pegInType = PegInType.Lock;
-            } else if (mainTopic == TOPIC_PEG_IN_BURNED) {
-                expectedLen = 0x120;
-                pegInType = PegInType.Burn;
-            } else {
+            // input data length must be equal to 0x120 bytes (check event structure)
+            if (len != 0x120) {
                 return PegInType.None;
             }
-            if (len != expectedLen) {
+            // parse logs based on topic type and check that event data has correct length
+            if (mainTopic == TOPIC_PEG_IN_LOCKED) {
+                pegInType = PegInType.Lock;
+            } else if (mainTopic == TOPIC_PEG_IN_BURNED) {
+                pegInType = PegInType.Burn;
+            } else {
                 return PegInType.None;
             }
         }

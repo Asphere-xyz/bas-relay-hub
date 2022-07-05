@@ -21,6 +21,7 @@ interface ICrossChainBridge {
         address fromToken,
         address toToken,
         uint256 totalAmount,
+        uint256 nonce,
         Metadata metadata
     );
     event DepositBurned(
@@ -30,8 +31,8 @@ interface ICrossChainBridge {
         address fromToken,
         address toToken,
         uint256 totalAmount,
-        Metadata metadata,
-        address originToken
+        uint256 nonce,
+        Metadata metadata
     );
 
     event WithdrawMinted(

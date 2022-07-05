@@ -5,7 +5,7 @@
 /** @function before */
 /** @var assert */
 
-const CrossChainBridge = artifacts.require("CrossChainBridge");
+const CrossChainBridge = artifacts.require("TestCrossChainBridge");
 const SimpleTokenFactory = artifacts.require("SimpleTokenFactory");
 const SimpleToken = artifacts.require("SimpleToken");
 const BridgeRouter = artifacts.require("BridgeRouter");

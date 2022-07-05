@@ -24,6 +24,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
     mapping(uint256 => address) internal _bridgeAddressByChainId;
     mapping(bytes32 => bool) internal _usedProofs;
     mapping(address => address) internal _peggedTokenOrigin;
+    uint256 internal _globalNonce;
 
     IRelayHub internal _basRelayHub;
     IBridgeRegistry internal _bridgeRegistry;
@@ -138,8 +139,10 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
             _nativeTokenMetadata.origin, // this is our current native token (e.g. ETH, MATIC, BNB, etc)
             toToken, // this is an address of our target pegged token
             totalAmount, // how much funds was locked in this contract
+            _globalNonce,
             _nativeTokenMetadata // meta information about
         );
+        _globalNonce++;
     }
 
     function _depositPegged(address fromToken, uint256 toChain, address toAddress, uint256 totalAmount, uint256 chain, address origin) internal {
@@ -164,9 +167,10 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
             fromToken, // this is our current native token (can be ETH, CLV, DOT, BNB or something else)
             toToken, // this is an address of our target pegged token
             scaledAmount, // how much funds was locked in this contract
-            metaData,
-            origin
+            _globalNonce,
+            metaData
         );
+        _globalNonce++;
     }
 
     function _depositErc20(address fromToken, uint256 toChain, address toAddress, uint256 totalAmount) internal {
@@ -202,8 +206,10 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
             fromToken, // this is our current native token (can be ETH, CLV, DOT, BNB or something else)
             toToken, // this is an address of our target pegged token
             scaledAmount, // how much funds was locked in this contract
+            _globalNonce,
             metaData // meta information about
         );
+        _globalNonce++;
     }
 
     function _peggedDestinationErc20Token(address fromToken, address origin, uint256 toChain, uint originChain) internal view returns (address) {
@@ -239,9 +245,13 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
         // verify provided block proof
         require(_basRelayHub.checkReceiptProof(state.originChain, blockProofs, rawReceipt, proofPath, proofSiblings), "bad proof");
         // make sure origin contract is allowed
-        require(_bridgeRegistry.getBridgeAddress(state.originChain) == state.contractAddress, "event from not allowed contract");
+        _checkContractAllowed(state);
         // withdraw funds to recipient
         _withdraw(state, pegInType, state.receiptHash);
+    }
+
+    function _checkContractAllowed(ReceiptParser.State memory state) internal view virtual {
+        require(_bridgeRegistry.getBridgeAddress(state.originChain) == state.contractAddress, "event from not allowed contract");
     }
 
     function _withdraw(ReceiptParser.State memory state, ReceiptParser.PegInType pegInType, bytes32 proofHash) internal {
@@ -261,7 +271,8 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
     }
 
     function _withdrawNative(ReceiptParser.State memory state) internal {
-        state.toAddress.transfer(state.totalAmount);
+        payable(state.toAddress).transfer(state.totalAmount);
+//        revert(Strings.toString(state.totalAmount));
         emit WithdrawUnlocked(
             state.receiptHash,
             state.fromAddress,
