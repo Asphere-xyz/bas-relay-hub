@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/Multicall.sol";
 
 import "./interfaces/IProofVerificationFunction.sol";
 import "./interfaces/IRelayHub.sol";
+import "./interfaces/IValidatorChecker.sol";
 import "./interfaces/IBridgeRegistry.sol";
 
 import "./libraries/BitUtils.sol";
@@ -15,7 +16,7 @@ import "./libraries/MerklePatriciaProof.sol";
 
 import "./BlockVerifierFactory.sol";
 
-contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
+contract RelayHub is Multicall, IRelayHub, IBridgeRegistry, IValidatorChecker {
 
     using EnumerableSet for EnumerableSet.AddressSet;
     using BitMaps for BitMaps.BitMap;
@@ -34,6 +35,7 @@ contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
         EnumerableSet.AddressSet allValidators;
         // mapping from epoch to the bitmap with active validators indices
         mapping(uint64 => BitMaps.BitMap) activeValidators;
+        mapping(uint64 => uint64) validatorCount;
         // latest published epoch
         uint64 latestKnownEpoch;
     }
@@ -106,29 +108,34 @@ contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
     ) internal {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.NotFound || bas.chainStatus == ChainStatus.Verifying, "already registered");
-        address[] memory initialValidatorSet;
-        uint64 epochNumber = 0;
-        if (checkpointHash == ZERO_BLOCK_HASH) {
-            initialValidatorSet = _verificationFunction(verificationFunction).verifyGenesisBlock(blockProof, chainId, epochLength);
-        } else {
-            (initialValidatorSet, epochNumber) = _verificationFunction(verificationFunction).verifyCheckpointBlock(blockProof, chainId, checkpointHash, epochLength);
+        (
+        bytes32 blockHash,
+        address[] memory initialValidatorSet,
+        uint64 blockNumber
+        ) = _verificationFunction(verificationFunction).verifyBlockWithoutQuorum(chainId, blockProof, epochLength);
+        if (checkpointHash != ZERO_BLOCK_HASH) {
+            require(checkpointHash == blockHash, "bad checkpoint hash");
         }
         bas.chainStatus = defaultStatus;
         bas.verificationFunction = verificationFunction;
         bas.bridgeAddress = bridgeAddress;
         bas.epochLength = epochLength;
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        _updateActiveValidatorSet(validatorHistory, initialValidatorSet, epochNumber);
+        _updateActiveValidatorSet(validatorHistory, initialValidatorSet, blockNumber / epochLength);
         _registeredChains[chainId] = bas;
         emit ChainRegistered(chainId, initialValidatorSet);
     }
 
-    function _updateActiveValidatorSet(ValidatorHistory storage validatorHistory, address[] memory validatorsList, uint64 epochNumber) internal {
+    function _updateActiveValidatorSet(ValidatorHistory storage validatorHistory, address[] memory newValidatorSet, uint64 epochNumber) internal {
+        // make sure epochs updated one by one (don't do this check for the first transition)
+        if (validatorHistory.latestKnownEpoch > 0 && epochNumber > 0) {
+            require(epochNumber == validatorHistory.latestKnownEpoch + 1, "bad epoch");
+        }
         uint256[] memory buckets = new uint256[]((validatorHistory.allValidators.length() >> 8) + 1);
         // build set of buckets with new bits
-        for (uint256 i = 0; i < validatorsList.length; i++) {
+        for (uint256 i = 0; i < newValidatorSet.length; i++) {
             // add validator to the set of all validators
-            address validator = validatorsList[i];
+            address validator = newValidatorSet[i];
             validatorHistory.allValidators.add(validator);
             // get index of the validator in the set (-1 because 0 is not used)
             uint256 index = validatorHistory.allValidators._inner._indexes[bytes32(uint256(uint160(validator)))] - 1;
@@ -139,7 +146,8 @@ contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
         for (uint256 i = 0; i < buckets.length; i++) {
             currentBitmap._data[i] = buckets[i];
         }
-        // remember latest verified epoch
+        // remember total amount of validators and latest verified epoch
+        validatorHistory.validatorCount[epochNumber] = uint64(newValidatorSet.length);
         validatorHistory.latestKnownEpoch = epochNumber;
     }
 
@@ -189,20 +197,86 @@ contract RelayHub is Multicall, IRelayHub, IBridgeRegistry {
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.Verifying || bas.chainStatus == ChainStatus.Active, "not active");
         ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        (address[] memory newValidatorSet, uint64 epochNumber) = _verificationFunction(bas.verificationFunction).verifyValidatorTransition(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch), bas.epochLength);
-        require(epochNumber == validatorHistory.latestKnownEpoch + 1, "bad epoch");
+        (address[] memory newValidatorSet, uint64 epochNumber) = _verificationFunction(bas.verificationFunction).verifyValidatorTransition(chainId, blockProofs, bas.epochLength, this);
         bas.chainStatus = ChainStatus.Active;
         _updateActiveValidatorSet(validatorHistory, newValidatorSet, epochNumber);
         _registeredChains[chainId] = bas;
         emit ValidatorSetUpdated(chainId, newValidatorSet);
     }
 
-    function checkReceiptProof(uint256 chainId, bytes[] calldata blockProofs, bytes memory rawReceipt, bytes memory path, bytes calldata siblings) external view virtual override returns (bool) {
+    function checkpointTransition(
+        uint256 chainId,
+        bytes calldata rawEpochBlock,
+        bytes32 checkpointHash,
+        bytes[] calldata signatures
+    ) external {
+        // make sure bas is registered and active
+        BAS memory bas = _registeredChains[chainId];
+        require(bas.chainStatus == ChainStatus.Verifying || bas.chainStatus == ChainStatus.Active, "not active");
+        // verify next epoch block with new validator set
+        (
+        bytes32 blockHash,
+        address[] memory newValidatorSet,
+        uint64 blockNumber
+        ) = _verificationFunction(bas.verificationFunction).verifyBlockWithoutQuorum(chainId, rawEpochBlock, bas.epochLength);
+        uint64 newEpochNumber = blockNumber / bas.epochLength;
+        // lets check signatures and make sure quorum is reached
+        {
+            address[] memory signers = new address[](signatures.length);
+            bytes32 signingRoot = keccak256(abi.encode(blockHash, checkpointHash));
+            for (uint256 i = 0; i < signatures.length; i++) {
+                signers[i] = ECDSA.recover(signingRoot, signatures[i]);
+            }
+            require(checkValidatorsAndQuorumReached(chainId, signers, newEpochNumber - 1), "quorum not reached");
+        }
+        // update validator set
+        {
+            ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
+            _updateActiveValidatorSet(validatorHistory, newValidatorSet, newEpochNumber);
+        }
+        // remember bas status
+        bas.chainStatus = ChainStatus.Active;
+        _registeredChains[chainId] = bas;
+    }
+
+    function checkValidatorsAndQuorumReached(uint256 chainId, address[] memory validatorSet, uint64 epochNumber) public view returns (bool) {
+        // find validator history for epoch and bitmap with active validators
+        ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
+        BitMaps.BitMap storage bitMap = validatorHistory.activeValidators[epochNumber];
+        // we must know total active validators and unique validators to check reachability of the quorum
+        uint256 totalValidators = validatorHistory.validatorCount[epochNumber];
+        uint256 uniqueValidators = 0;
+        uint256[] memory markedValidators = new uint256[]((totalValidators + 0xff) >> 8);
+        for (uint256 i = 0; i < validatorSet.length; i++) {
+            // find validator's index and make sure it exists in the validator set
+            uint256 index = validatorHistory.allValidators._inner._indexes[bytes32(uint256(uint160(validatorSet[i])))] - 1;
+            require(bitMap.get(index), "bad validator");
+            // mark used validators to be sure quorum is well-calculated
+            uint256 usedMask = 1 << (index & 0xff);
+            if (markedValidators[index >> 8] & usedMask == 0) {
+                uniqueValidators++;
+            }
+            markedValidators[index >> 8] |= usedMask;
+        }
+        return uniqueValidators >= totalValidators * 2 / 3;
+    }
+
+    function checkReceiptProof(
+        uint256 chainId,
+        bytes[] calldata blockProofs,
+        bytes calldata rawReceipt,
+        bytes calldata proofSiblings,
+        bytes calldata proofPath
+    ) external view virtual override returns (bool) {
+        // make sure bas chain is registered and active
         BAS memory bas = _registeredChains[chainId];
         require(bas.chainStatus == ChainStatus.Active, "not active");
-        ValidatorHistory storage validatorHistory = _validatorHistories[chainId];
-        IProofVerificationFunction.VerifiedBlock memory verifiedBlock = _verificationFunction(bas.verificationFunction).verifyBlock(blockProofs, chainId, _extractActiveValidators(validatorHistory, validatorHistory.latestKnownEpoch), bas.epochLength);
-        return MerklePatriciaProof.verify(keccak256(rawReceipt), path, siblings, verifiedBlock.receiptRoot);
+        // verify block transition
+        IProofVerificationFunction pvf = _verificationFunction(bas.verificationFunction);
+        IProofVerificationFunction.BlockHeader memory blockHeader = pvf.verifyBlockAndReachedQuorum(chainId, blockProofs, bas.epochLength, this);
+        // check receipt proof
+        return pvf.checkReceiptProof(rawReceipt, blockHeader.receiptsRoot, proofSiblings, proofPath);
+        return true;
     }
 
     function _verificationFunction(IProofVerificationFunction verificationFunction) internal view returns (IProofVerificationFunction) {

@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/Ankr-network/bas-relay-hub/relayer/abigen"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"math/big"
@@ -157,40 +155,6 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 	}
 }
 
-func (s *RelayService) createBlockProofs(ctx context.Context, client *ethclient.Client, atBlock, epochLength uint64) ([][]byte, error) {
-	prevEpochBlock, err := client.BlockByNumber(ctx, big.NewInt(int64(atBlock-epochLength)))
-	if err != nil {
-		return nil, errors.Wrapf(err, "can't fetch prev epoch block (%d)", atBlock-epochLength)
-	}
-	prevEpochValidators, err := extractParliaValidators(prevEpochBlock.Header())
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to extract parlia block validators")
-	}
-	uniqueSigners := make(map[common.Address]bool)
-	quorumRequired := len(prevEpochValidators) * 2 / 3
-	var blockProofs [][]byte
-	for i := atBlock; i < atBlock+epochLength; i++ {
-		block, err := client.BlockByNumber(ctx, big.NewInt(int64(i)))
-		if err != nil {
-			return nil, errors.Wrapf(err, "can't fetch fetch block (%d)", i)
-		}
-		blockRlp, err := rlp.EncodeToBytes(block.Header())
-		if err != nil {
-			return nil, errors.Wrapf(err, "rlp encode failed")
-		}
-		blockProofs = append(blockProofs, blockRlp)
-		// make sure quorum is reached
-		uniqueSigners[block.Header().Coinbase] = true
-		if len(uniqueSigners) >= quorumRequired {
-			break
-		}
-	}
-	if len(uniqueSigners) < quorumRequired {
-		return nil, fmt.Errorf("failed to reach quorum for epoch block %d, reached only %d/%d", atBlock, len(uniqueSigners), quorumRequired)
-	}
-	return blockProofs, nil
-}
-
 func (s *RelayService) createEpochTransition(ctx context.Context, source, target *nodeConfig, epochBlock, latestKnownBlock uint64, gasLimit int64) (err error) {
 	opts := injectSigner(target.chainId, source.config.Relayer.PrivateKey, nil)
 	opts.Context = ctx
@@ -205,7 +169,7 @@ func (s *RelayService) createEpochTransition(ctx context.Context, source, target
 	if gasLimit > 0 {
 		var inputs [][]byte
 		// estimate gas consumption
-		blockProofs, err := s.createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
+		blockProofs, err := createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
 		if err != nil {
 			return err
 		}
@@ -226,7 +190,7 @@ func (s *RelayService) createEpochTransition(ctx context.Context, source, target
 			if batchEpochBlock > latestKnownBlock {
 				break
 			}
-			blockProofs, err := s.createBlockProofs(ctx, source.client, batchEpochBlock, source.chainConfig.EpochLength)
+			blockProofs, err := createBlockProofs(ctx, source.client, batchEpochBlock, source.chainConfig.EpochLength)
 			if err != nil {
 				return err
 			}
@@ -244,7 +208,7 @@ func (s *RelayService) createEpochTransition(ctx context.Context, source, target
 			return errors.Wrapf(err, "failed to do multicall")
 		}
 	} else {
-		blockProofs, err := s.createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
+		blockProofs, err := createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
 		if err != nil {
 			return err
 		}

@@ -1,41 +1,53 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
+import "./IValidatorChecker.sol";
+
 interface IProofVerificationFunction {
 
-    function verifyCheckpointBlock(
-        bytes calldata genesisBlock,
-        uint256 chainId,
-        bytes32 checkpointHash,
-        uint32 epochLength
-    ) external view returns (address[] memory initialValidatorSet, uint64 epochNumber);
-
-    function verifyGenesisBlock(
-        bytes calldata genesisBlock,
-        uint256 chainId,
-        uint32 epochLength
-    ) external view returns (address[] memory initialValidatorSet);
-
-    function verifyValidatorTransition(
-        bytes[] calldata blockProofs,
-        uint256 chainId,
-        address[] calldata existingValidatorSet,
-        uint32 epochLength
-    ) external view returns (address[] memory newValidatorSet, uint64 epochNumber);
-
-    struct VerifiedBlock {
+    struct BlockHeader {
         bytes32 blockHash;
         bytes32 parentHash;
         uint64 blockNumber;
+        address coinbase;
+        bytes32 receiptsRoot;
+        bytes32 txsRoot;
         bytes32 stateRoot;
-        bytes32 txRoot;
-        bytes32 receiptRoot;
     }
 
-    function verifyBlock(
-        bytes[] calldata blockProofs,
+    function verifyBlockWithoutQuorum(
         uint256 chainId,
-        address[] calldata existingValidatorSet,
-        uint32 epochLength
-    ) external view returns (VerifiedBlock memory result);
+        bytes calldata rawBlock,
+        uint64 epochLength
+    ) external view returns (
+        bytes32 blockHash,
+        address[] memory validatorSet,
+        uint64 blockNumber
+    );
+
+    function verifyValidatorTransition(
+        uint256 chainId,
+        bytes[] calldata blockProofs,
+        uint32 epochLength,
+        IValidatorChecker validatorChecker
+    ) external view returns (
+        address[] memory newValidatorSet,
+        uint64 epochNumber
+    );
+
+    function verifyBlockAndReachedQuorum(
+        uint256 chainId,
+        bytes[] calldata blockProofs,
+        uint32 epochLength,
+        IValidatorChecker validatorChecker
+    ) external view returns (
+        BlockHeader memory firstBlock
+    );
+
+    function checkReceiptProof(
+        bytes calldata rawReceipt,
+        bytes32 receiptRoot,
+        bytes calldata proofSiblings,
+        bytes calldata proofPath
+    ) external view returns (bool);
 }

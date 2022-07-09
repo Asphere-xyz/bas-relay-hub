@@ -236,14 +236,14 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
     function withdraw(
         bytes[] calldata blockProofs,
         bytes calldata rawReceipt,
-        bytes memory proofPath,
+        bytes calldata proofPath,
         bytes calldata proofSiblings
     ) external nonReentrant whenNotPaused override {
         // we must parse and verify that tx and receipt matches
         (ReceiptParser.State memory state, ReceiptParser.PegInType pegInType) = ReceiptParser.parseTransactionReceipt(rawReceipt);
         require(state.chainId == block.chainid, "receipt points to another chain");
         // verify provided block proof
-        require(_basRelayHub.checkReceiptProof(state.originChain, blockProofs, rawReceipt, proofPath, proofSiblings), "bad proof");
+        require(_basRelayHub.checkReceiptProof(state.originChain, blockProofs, rawReceipt, proofSiblings, proofPath), "bad proof");
         // make sure origin contract is allowed
         _checkContractAllowed(state);
         // withdraw funds to recipient
@@ -272,7 +272,7 @@ contract CrossChainBridge is PausableUpgradeable, ReentrancyGuardUpgradeable, Ow
 
     function _withdrawNative(ReceiptParser.State memory state) internal {
         payable(state.toAddress).transfer(state.totalAmount);
-//        revert(Strings.toString(state.totalAmount));
+        //        revert(Strings.toString(state.totalAmount));
         emit WithdrawUnlocked(
             state.receiptHash,
             state.fromAddress,
