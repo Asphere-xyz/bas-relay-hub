@@ -18,6 +18,20 @@ func must[T interface{}](value *T, err error) *T {
 	return value
 }
 
+func mappingKeys[K comparable, V any](value map[K]V) (result []K) {
+	for k := range value {
+		result = append(result, k)
+	}
+	return result
+}
+
+func mappingValues[K comparable, V any](value map[K]V) (result []V) {
+	for _, v := range value {
+		result = append(result, v)
+	}
+	return result
+}
+
 func waitTxToBeMined(ctx context.Context, eth *ethclient.Client, txHash common.Hash) error {
 	tries := 30
 	for tries > 0 {

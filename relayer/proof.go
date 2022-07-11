@@ -10,6 +10,18 @@ import (
 	"math/big"
 )
 
+func calcRequiredQuorumForNextEpoch(ctx context.Context, nc *nodeConfig, epochBlock uint64) (int, error) {
+	prevEpochBlock, err := nc.client.BlockByNumber(ctx, big.NewInt(int64(epochBlock-nc.chainConfig.EpochLength)))
+	if err != nil {
+		return 0, errors.Wrapf(err, "can't fetch prev epoch block (%d)", epochBlock-nc.chainConfig.EpochLength)
+	}
+	prevEpochValidators, err := extractParliaValidators(prevEpochBlock.Header())
+	if err != nil {
+		return 0, errors.Wrapf(err, "failed to extract parlia block validators")
+	}
+	return len(prevEpochValidators) * 2 / 3, nil
+}
+
 func createBlockProofs(ctx context.Context, client *ethclient.Client, epochBlock, epochLength uint64) ([][]byte, error) {
 	prevEpochBlock, err := client.BlockByNumber(ctx, big.NewInt(int64(epochBlock-epochLength)))
 	if err != nil {

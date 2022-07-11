@@ -32,7 +32,7 @@ func readFromFile(v *viper.Viper) {
 	}
 }
 
-func NewViper() *viper.Viper {
+func newViper() *viper.Viper {
 	v := viper.New()
 	// enable parse from environment variable
 	v.AutomaticEnv()

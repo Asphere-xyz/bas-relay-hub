@@ -7,18 +7,29 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/olebedev/emitter"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"math/big"
+	"sync"
 	"time"
 )
 
 type RelayService struct {
+	emitter *emitter.Emitter
+
 	rootRpc, childRpc *ethclient.Client
+
+	proofsLock sync.RWMutex
+	proofsMap  *lru.Cache
 }
 
-func NewRelayService() *RelayService {
-	return &RelayService{}
+func NewRelayService(emitter *emitter.Emitter) *RelayService {
+	return &RelayService{
+		emitter:   emitter,
+		proofsMap: must(lru.New(1_000)),
+	}
 }
 
 func (s *RelayService) Start(config *Config) (err error) {
@@ -40,10 +51,50 @@ func (s *RelayService) Start(config *Config) (err error) {
 			log.Fatalf("background worker failed: %+v", err)
 		}
 	}()
+	// collect checkpoint proofs
+	go s.collectCheckpointProofsWorker()
 	return nil
 }
 
-func (s *RelayService) latestBlockFetcher(config *Config, client *ethclient.Client) chan uint64 {
+func (s *RelayService) collectCheckpointProofsWorker() {
+	event := s.emitter.On(checkpointProofReceived)
+	for {
+		select {
+		case e := <-event:
+			proof := e.Args[0].(*checkpointProof)
+			s.mergeCheckpointProof(proof)
+		}
+	}
+}
+
+func (s *RelayService) findCheckpointProof(checkpointHash common.Hash) *checkpointProof {
+	s.proofsLock.RLock()
+	defer s.proofsLock.RUnlock()
+	found, ok := s.proofsMap.Get(checkpointHash)
+	if ok {
+		return found.(*checkpointProof)
+	}
+	return nil
+}
+
+func (s *RelayService) mergeCheckpointProof(proof *checkpointProof) *checkpointProof {
+	s.proofsLock.Lock()
+	defer s.proofsLock.Unlock()
+	existing, ok := s.proofsMap.Get(proof.checkpointHash)
+	if !ok {
+		s.proofsMap.Add(proof.epochNumber, proof)
+		return proof
+	}
+	existingProof := existing.(*checkpointProof)
+	for signer, signature := range proof.signatures {
+		if existingProof.addSignature(signer, signature) {
+			log.WithField("epoch", proof.epochNumber).WithField("signer", signer.Hex()).Infof("received signature for epoch")
+		}
+	}
+	return existingProof
+}
+
+func (s *RelayService) latestBlockFetcher(nc *nodeConfig, client *ethclient.Client) chan uint64 {
 	log.Infof("starting latest block fetcher")
 	blockNumberChannel := make(chan uint64)
 	refreshRate := time.Tick(3 * time.Second)
@@ -53,14 +104,14 @@ func (s *RelayService) latestBlockFetcher(config *Config, client *ethclient.Clie
 			<-refreshRate
 			blockNumber, err := client.BlockNumber(context.TODO())
 			if err != nil {
-				log.Error("failed to fetch latest block number: %+v", err)
+				log.WithError(err).Errorf("failed to fetch latest block number")
 				continue
 			}
 			if blockNumber <= latestBlockNumber {
 				continue
 			}
 			latestBlockNumber = blockNumber
-			confirmedBlock := blockNumber - config.ConfirmationBlocks
+			confirmedBlock := blockNumber - nc.chainConfig.Confirmations
 			if confirmedBlock < 0 {
 				continue
 			}
@@ -101,7 +152,7 @@ func (s *RelayService) toNodeConfig(config *Config, isRoot bool) *nodeConfig {
 	// make sure chain id is correct
 	chainId, err := nc.client.ChainID(context.TODO())
 	if err != nil {
-		log.WithField("err", err).Fatalf("failed to fetch chain id from node")
+		log.WithError(err).Fatalf("failed to fetch chain id from node")
 	} else if big.NewInt(int64(chainConfig.ChainId)).Cmp(chainId) != 0 {
 		log.Fatalf("chain id mismatched: %d != %d", chainConfig.ChainId, chainId.Uint64())
 	}
@@ -112,7 +163,7 @@ func (s *RelayService) toNodeConfig(config *Config, isRoot bool) *nodeConfig {
 func (s *RelayService) epochWorker(source, target *nodeConfig) {
 	log := log.WithField("chain", source.chainConfig.ChainName)
 	log.Infof("subscribing to the chain head events")
-	blockNumberChannel := s.latestBlockFetcher(source.config, source.client)
+	blockNumberChannel := s.latestBlockFetcher(source, source.client)
 	log.Infof("listening for incomming events")
 	if source.chainConfig.EpochLength == 0 {
 		log.Fatalf("zero epoch blocks is not possible")
@@ -132,11 +183,29 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 			if latestKnownBlock < waitForBlock || waitForBlock > latestKnownBlock {
 				continue
 			}
-			log.WithField("epoch", latestTransitionedEpoch+1).Infof("epoch is reached, doing transition")
-			if err := s.createEpochTransition(context.TODO(), source, target, waitForBlock, latestKnownBlock, int64(source.config.GasLimit)); err != nil {
-				log.WithField("err", err).Errorf("failed to create epoch transition")
-				time.Sleep(30 * time.Second)
-				break
+			// run checkpoint checks
+			var success bool
+			if len(source.config.Relayer.RelayerUrls) > 0 {
+				const checkpointTransitionTimeout = 2 * time.Minute
+				success = func() bool {
+					ctx, cancel := context.WithTimeout(context.TODO(), checkpointTransitionTimeout)
+					defer cancel()
+					log.WithField("epoch", latestTransitionedEpoch+1).Infof("epoch is reached, doing checkpoint transition")
+					err := s.createCheckpointTransition(ctx, source, target, waitForBlock, latestTransitionedEpoch)
+					if err != nil {
+						log.WithError(err).Warnf("checkpoint transition failed, trying confirmation transition")
+						return false
+					}
+					return true
+				}()
+			}
+			if !success {
+				log.WithField("epoch", latestTransitionedEpoch+1).Infof("epoch is reached, doing confirmation transition")
+				if err := s.createEpochTransition(context.TODO(), source, target, waitForBlock, latestKnownBlock); err != nil {
+					log.WithError(err).Errorf("failed to create epoch transition")
+					time.Sleep(30 * time.Second)
+					break
+				}
 			}
 			prevLatestTransitionedEpoch := latestTransitionedEpoch
 			latestTransitionedEpoch, err = target.relayHub.GetLatestTransitionedEpoch(&bind.CallOpts{}, source.chainId)
@@ -155,7 +224,49 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 	}
 }
 
-func (s *RelayService) createEpochTransition(ctx context.Context, source, target *nodeConfig, epochBlock, latestKnownBlock uint64, gasLimit int64) (err error) {
+func (s *RelayService) createCheckpointTransition(ctx context.Context, source, target *nodeConfig, epochBlock, latestKnownBlock uint64) (err error) {
+	// create and sign checkpoint proof
+	proof, err := createCheckpointProof(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
+	if err != nil {
+		return err
+	}
+	err = proof.signCheckpointProof(source.config.Relayer.PrivateKey)
+	if err != nil {
+		return err
+	}
+	proof = s.mergeCheckpointProof(proof)
+	<-s.emitter.Emit(checkpointProofSigned, proof)
+	// wait for quorum to be reached
+	quorumRequired, err := calcRequiredQuorumForNextEpoch(ctx, source, epochBlock)
+	if err != nil {
+		return err
+	}
+	ticker := time.Tick(1 * time.Second)
+	for len(proof.signatures) < quorumRequired {
+		select {
+		case <-ticker:
+			break
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	// send transaction
+	opts := injectSigner(target.chainId, source.config.Relayer.PrivateKey, nil)
+	opts.Context = ctx
+	tx, err := target.relayHub.CheckpointTransition(opts, source.chainId, proof.rawEpochBlock, proof.checkpointHash, mappingValues(proof.signatures))
+	if err != nil {
+		return err
+	}
+	log.WithFields(logrus.Fields{
+		"chain":     target.chainConfig.ChainName,
+		"hash":      tx.Hash().Hex(),
+		"batchSize": 1,
+		"gasUsed":   tx.Gas(),
+	}).Infof("updated validator set")
+	return waitTxToBeMined(ctx, target.client, tx.Hash())
+}
+
+func (s *RelayService) createEpochTransition(ctx context.Context, source, target *nodeConfig, epochBlock, latestKnownBlock uint64) (err error) {
 	opts := injectSigner(target.chainId, source.config.Relayer.PrivateKey, nil)
 	opts.Context = ctx
 	log.WithFields(logrus.Fields{
@@ -166,7 +277,7 @@ func (s *RelayService) createEpochTransition(ctx context.Context, source, target
 	}).Infof("executing epoch transition")
 	var tx *types.Transaction
 	batchSize := 1
-	if gasLimit > 0 {
+	if target.chainConfig.GasLimit > 0 {
 		var inputs [][]byte
 		// estimate gas consumption
 		blockProofs, err := createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
@@ -182,7 +293,7 @@ func (s *RelayService) createEpochTransition(ctx context.Context, source, target
 		estimateGasUsage := tx.Gas()
 		const txGasReserve = 100_000
 		const txMaxInput = 100 * 1024
-		batchSize = int(gasLimit-txGasReserve) / int(estimateGasUsage)
+		batchSize = int(target.chainConfig.GasLimit-txGasReserve) / int(estimateGasUsage)
 		inputSize := 0
 		// create batch
 		for bs := 0; bs < batchSize; bs++ {

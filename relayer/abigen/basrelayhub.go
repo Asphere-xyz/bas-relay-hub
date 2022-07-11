@@ -30,7 +30,7 @@ var (
 
 // RelayHubMetaData contains all meta data concerning the RelayHub contract.
 var RelayHubMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"contractIProofVerificationFunction\",\"name\":\"defaultVerificationFunction\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address[]\",\"name\":\"initValidatorSet\",\"type\":\"address[]\"}],\"name\":\"ChainRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address[]\",\"name\":\"newValidatorSet\",\"type\":\"address[]\"}],\"name\":\"ValidatorSetUpdated\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"bytes[]\",\"name\":\"data\",\"type\":\"bytes[]\"}],\"name\":\"multicall\",\"outputs\":[{\"internalType\":\"bytes[]\",\"name\":\"results\",\"type\":\"bytes[]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"}],\"name\":\"getBridgeAddress\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"genesisBlock\",\"type\":\"bytes\"},{\"internalType\":\"address\",\"name\":\"bridgeAddress\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"epochLength\",\"type\":\"uint32\"}],\"name\":\"registerCertifiedBAS\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"checkpointBlock\",\"type\":\"bytes\"},{\"internalType\":\"bytes32\",\"name\":\"checkpointHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes\",\"name\":\"checkpointSignature\",\"type\":\"bytes\"},{\"internalType\":\"address\",\"name\":\"bridgeAddress\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"epochLength\",\"type\":\"uint32\"}],\"name\":\"registerUsingCheckpoint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"contractIProofVerificationFunction\",\"name\":\"verificationFunction\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"genesisBlock\",\"type\":\"bytes\"},{\"internalType\":\"address\",\"name\":\"bridgeAddress\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"epochLength\",\"type\":\"uint32\"}],\"name\":\"registerBAS\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"}],\"name\":\"getActiveValidators\",\"outputs\":[{\"internalType\":\"address[]\",\"name\":\"\",\"type\":\"address[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"address[]\",\"name\":\"validators\",\"type\":\"address[]\"},{\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"}],\"name\":\"checkValidators\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"uniqueValidators\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"}],\"name\":\"getLatestTransitionedEpoch\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes[]\",\"name\":\"blockProofs\",\"type\":\"bytes[]\"}],\"name\":\"updateValidatorSet\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes[]\",\"name\":\"blockProofs\",\"type\":\"bytes[]\"},{\"internalType\":\"bytes\",\"name\":\"rawReceipt\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"path\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"siblings\",\"type\":\"bytes\"}],\"name\":\"checkReceiptProof\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"contractIProofVerificationFunction\",\"name\":\"defaultVerificationFunction\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address[]\",\"name\":\"initValidatorSet\",\"type\":\"address[]\"}],\"name\":\"ChainRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address[]\",\"name\":\"newValidatorSet\",\"type\":\"address[]\"}],\"name\":\"ValidatorSetUpdated\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"bytes[]\",\"name\":\"data\",\"type\":\"bytes[]\"}],\"name\":\"multicall\",\"outputs\":[{\"internalType\":\"bytes[]\",\"name\":\"results\",\"type\":\"bytes[]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"}],\"name\":\"getBridgeAddress\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"genesisBlock\",\"type\":\"bytes\"},{\"internalType\":\"address\",\"name\":\"bridgeAddress\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"epochLength\",\"type\":\"uint32\"}],\"name\":\"registerCertifiedBAS\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"checkpointBlock\",\"type\":\"bytes\"},{\"internalType\":\"bytes32\",\"name\":\"checkpointHash\",\"type\":\"bytes32\"},{\"internalType\":\"address\",\"name\":\"bridgeAddress\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"epochLength\",\"type\":\"uint32\"}],\"name\":\"registerUsingCheckpoint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"contractIProofVerificationFunction\",\"name\":\"verificationFunction\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"genesisBlock\",\"type\":\"bytes\"},{\"internalType\":\"address\",\"name\":\"bridgeAddress\",\"type\":\"address\"},{\"internalType\":\"uint32\",\"name\":\"epochLength\",\"type\":\"uint32\"}],\"name\":\"registerBAS\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"}],\"name\":\"getActiveValidators\",\"outputs\":[{\"internalType\":\"address[]\",\"name\":\"\",\"type\":\"address[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"address[]\",\"name\":\"validators\",\"type\":\"address[]\"},{\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"}],\"name\":\"checkValidators\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"uniqueValidators\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"}],\"name\":\"getLatestTransitionedEpoch\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes[]\",\"name\":\"blockProofs\",\"type\":\"bytes[]\"}],\"name\":\"updateValidatorSet\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes[]\",\"name\":\"blockProofs\",\"type\":\"bytes[]\"}],\"name\":\"updateValidatorSetUsingEpochBlocks\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"rawEpochBlock\",\"type\":\"bytes\"},{\"internalType\":\"bytes32\",\"name\":\"checkpointHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes[]\",\"name\":\"signatures\",\"type\":\"bytes[]\"}],\"name\":\"checkpointTransition\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"address[]\",\"name\":\"validatorSet\",\"type\":\"address[]\"},{\"internalType\":\"uint64\",\"name\":\"epochNumber\",\"type\":\"uint64\"}],\"name\":\"checkValidatorsAndQuorumReached\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"chainId\",\"type\":\"uint256\"},{\"internalType\":\"bytes[]\",\"name\":\"blockProofs\",\"type\":\"bytes[]\"},{\"internalType\":\"bytes\",\"name\":\"rawReceipt\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofSiblings\",\"type\":\"bytes\"},{\"internalType\":\"bytes\",\"name\":\"proofPath\",\"type\":\"bytes\"}],\"name\":\"checkReceiptProof\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
 }
 
 // RelayHubABI is the input ABI used to generate the binding from.
@@ -181,10 +181,10 @@ func (_RelayHub *RelayHubTransactorRaw) Transact(opts *bind.TransactOpts, method
 
 // CheckReceiptProof is a free data retrieval call binding the contract method 0x973ebcd8.
 //
-// Solidity: function checkReceiptProof(uint256 chainId, bytes[] blockProofs, bytes rawReceipt, bytes path, bytes siblings) view returns(bool)
-func (_RelayHub *RelayHubCaller) CheckReceiptProof(opts *bind.CallOpts, chainId *big.Int, blockProofs [][]byte, rawReceipt []byte, path []byte, siblings []byte) (bool, error) {
+// Solidity: function checkReceiptProof(uint256 chainId, bytes[] blockProofs, bytes rawReceipt, bytes proofSiblings, bytes proofPath) view returns(bool)
+func (_RelayHub *RelayHubCaller) CheckReceiptProof(opts *bind.CallOpts, chainId *big.Int, blockProofs [][]byte, rawReceipt []byte, proofSiblings []byte, proofPath []byte) (bool, error) {
 	var out []interface{}
-	err := _RelayHub.contract.Call(opts, &out, "checkReceiptProof", chainId, blockProofs, rawReceipt, path, siblings)
+	err := _RelayHub.contract.Call(opts, &out, "checkReceiptProof", chainId, blockProofs, rawReceipt, proofSiblings, proofPath)
 
 	if err != nil {
 		return *new(bool), err
@@ -198,16 +198,16 @@ func (_RelayHub *RelayHubCaller) CheckReceiptProof(opts *bind.CallOpts, chainId 
 
 // CheckReceiptProof is a free data retrieval call binding the contract method 0x973ebcd8.
 //
-// Solidity: function checkReceiptProof(uint256 chainId, bytes[] blockProofs, bytes rawReceipt, bytes path, bytes siblings) view returns(bool)
-func (_RelayHub *RelayHubSession) CheckReceiptProof(chainId *big.Int, blockProofs [][]byte, rawReceipt []byte, path []byte, siblings []byte) (bool, error) {
-	return _RelayHub.Contract.CheckReceiptProof(&_RelayHub.CallOpts, chainId, blockProofs, rawReceipt, path, siblings)
+// Solidity: function checkReceiptProof(uint256 chainId, bytes[] blockProofs, bytes rawReceipt, bytes proofSiblings, bytes proofPath) view returns(bool)
+func (_RelayHub *RelayHubSession) CheckReceiptProof(chainId *big.Int, blockProofs [][]byte, rawReceipt []byte, proofSiblings []byte, proofPath []byte) (bool, error) {
+	return _RelayHub.Contract.CheckReceiptProof(&_RelayHub.CallOpts, chainId, blockProofs, rawReceipt, proofSiblings, proofPath)
 }
 
 // CheckReceiptProof is a free data retrieval call binding the contract method 0x973ebcd8.
 //
-// Solidity: function checkReceiptProof(uint256 chainId, bytes[] blockProofs, bytes rawReceipt, bytes path, bytes siblings) view returns(bool)
-func (_RelayHub *RelayHubCallerSession) CheckReceiptProof(chainId *big.Int, blockProofs [][]byte, rawReceipt []byte, path []byte, siblings []byte) (bool, error) {
-	return _RelayHub.Contract.CheckReceiptProof(&_RelayHub.CallOpts, chainId, blockProofs, rawReceipt, path, siblings)
+// Solidity: function checkReceiptProof(uint256 chainId, bytes[] blockProofs, bytes rawReceipt, bytes proofSiblings, bytes proofPath) view returns(bool)
+func (_RelayHub *RelayHubCallerSession) CheckReceiptProof(chainId *big.Int, blockProofs [][]byte, rawReceipt []byte, proofSiblings []byte, proofPath []byte) (bool, error) {
+	return _RelayHub.Contract.CheckReceiptProof(&_RelayHub.CallOpts, chainId, blockProofs, rawReceipt, proofSiblings, proofPath)
 }
 
 // CheckValidators is a free data retrieval call binding the contract method 0xab50f3d0.
@@ -239,6 +239,37 @@ func (_RelayHub *RelayHubSession) CheckValidators(chainId *big.Int, validators [
 // Solidity: function checkValidators(uint256 chainId, address[] validators, uint64 epoch) view returns(uint64 uniqueValidators)
 func (_RelayHub *RelayHubCallerSession) CheckValidators(chainId *big.Int, validators []common.Address, epoch uint64) (uint64, error) {
 	return _RelayHub.Contract.CheckValidators(&_RelayHub.CallOpts, chainId, validators, epoch)
+}
+
+// CheckValidatorsAndQuorumReached is a free data retrieval call binding the contract method 0xe551e9ed.
+//
+// Solidity: function checkValidatorsAndQuorumReached(uint256 chainId, address[] validatorSet, uint64 epochNumber) view returns(bool)
+func (_RelayHub *RelayHubCaller) CheckValidatorsAndQuorumReached(opts *bind.CallOpts, chainId *big.Int, validatorSet []common.Address, epochNumber uint64) (bool, error) {
+	var out []interface{}
+	err := _RelayHub.contract.Call(opts, &out, "checkValidatorsAndQuorumReached", chainId, validatorSet, epochNumber)
+
+	if err != nil {
+		return *new(bool), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+
+	return out0, err
+
+}
+
+// CheckValidatorsAndQuorumReached is a free data retrieval call binding the contract method 0xe551e9ed.
+//
+// Solidity: function checkValidatorsAndQuorumReached(uint256 chainId, address[] validatorSet, uint64 epochNumber) view returns(bool)
+func (_RelayHub *RelayHubSession) CheckValidatorsAndQuorumReached(chainId *big.Int, validatorSet []common.Address, epochNumber uint64) (bool, error) {
+	return _RelayHub.Contract.CheckValidatorsAndQuorumReached(&_RelayHub.CallOpts, chainId, validatorSet, epochNumber)
+}
+
+// CheckValidatorsAndQuorumReached is a free data retrieval call binding the contract method 0xe551e9ed.
+//
+// Solidity: function checkValidatorsAndQuorumReached(uint256 chainId, address[] validatorSet, uint64 epochNumber) view returns(bool)
+func (_RelayHub *RelayHubCallerSession) CheckValidatorsAndQuorumReached(chainId *big.Int, validatorSet []common.Address, epochNumber uint64) (bool, error) {
+	return _RelayHub.Contract.CheckValidatorsAndQuorumReached(&_RelayHub.CallOpts, chainId, validatorSet, epochNumber)
 }
 
 // GetActiveValidators is a free data retrieval call binding the contract method 0xd5fa9e49.
@@ -334,6 +365,27 @@ func (_RelayHub *RelayHubCallerSession) GetLatestTransitionedEpoch(chainId *big.
 	return _RelayHub.Contract.GetLatestTransitionedEpoch(&_RelayHub.CallOpts, chainId)
 }
 
+// CheckpointTransition is a paid mutator transaction binding the contract method 0x68b92c94.
+//
+// Solidity: function checkpointTransition(uint256 chainId, bytes rawEpochBlock, bytes32 checkpointHash, bytes[] signatures) returns()
+func (_RelayHub *RelayHubTransactor) CheckpointTransition(opts *bind.TransactOpts, chainId *big.Int, rawEpochBlock []byte, checkpointHash [32]byte, signatures [][]byte) (*types.Transaction, error) {
+	return _RelayHub.contract.Transact(opts, "checkpointTransition", chainId, rawEpochBlock, checkpointHash, signatures)
+}
+
+// CheckpointTransition is a paid mutator transaction binding the contract method 0x68b92c94.
+//
+// Solidity: function checkpointTransition(uint256 chainId, bytes rawEpochBlock, bytes32 checkpointHash, bytes[] signatures) returns()
+func (_RelayHub *RelayHubSession) CheckpointTransition(chainId *big.Int, rawEpochBlock []byte, checkpointHash [32]byte, signatures [][]byte) (*types.Transaction, error) {
+	return _RelayHub.Contract.CheckpointTransition(&_RelayHub.TransactOpts, chainId, rawEpochBlock, checkpointHash, signatures)
+}
+
+// CheckpointTransition is a paid mutator transaction binding the contract method 0x68b92c94.
+//
+// Solidity: function checkpointTransition(uint256 chainId, bytes rawEpochBlock, bytes32 checkpointHash, bytes[] signatures) returns()
+func (_RelayHub *RelayHubTransactorSession) CheckpointTransition(chainId *big.Int, rawEpochBlock []byte, checkpointHash [32]byte, signatures [][]byte) (*types.Transaction, error) {
+	return _RelayHub.Contract.CheckpointTransition(&_RelayHub.TransactOpts, chainId, rawEpochBlock, checkpointHash, signatures)
+}
+
 // Multicall is a paid mutator transaction binding the contract method 0xac9650d8.
 //
 // Solidity: function multicall(bytes[] data) returns(bytes[] results)
@@ -397,25 +449,25 @@ func (_RelayHub *RelayHubTransactorSession) RegisterCertifiedBAS(chainId *big.In
 	return _RelayHub.Contract.RegisterCertifiedBAS(&_RelayHub.TransactOpts, chainId, genesisBlock, bridgeAddress, epochLength)
 }
 
-// RegisterUsingCheckpoint is a paid mutator transaction binding the contract method 0x7b69eff0.
+// RegisterUsingCheckpoint is a paid mutator transaction binding the contract method 0x25953845.
 //
-// Solidity: function registerUsingCheckpoint(uint256 chainId, bytes checkpointBlock, bytes32 checkpointHash, bytes checkpointSignature, address bridgeAddress, uint32 epochLength) returns()
-func (_RelayHub *RelayHubTransactor) RegisterUsingCheckpoint(opts *bind.TransactOpts, chainId *big.Int, checkpointBlock []byte, checkpointHash [32]byte, checkpointSignature []byte, bridgeAddress common.Address, epochLength uint32) (*types.Transaction, error) {
-	return _RelayHub.contract.Transact(opts, "registerUsingCheckpoint", chainId, checkpointBlock, checkpointHash, checkpointSignature, bridgeAddress, epochLength)
+// Solidity: function registerUsingCheckpoint(uint256 chainId, bytes checkpointBlock, bytes32 checkpointHash, address bridgeAddress, uint32 epochLength) returns()
+func (_RelayHub *RelayHubTransactor) RegisterUsingCheckpoint(opts *bind.TransactOpts, chainId *big.Int, checkpointBlock []byte, checkpointHash [32]byte, bridgeAddress common.Address, epochLength uint32) (*types.Transaction, error) {
+	return _RelayHub.contract.Transact(opts, "registerUsingCheckpoint", chainId, checkpointBlock, checkpointHash, bridgeAddress, epochLength)
 }
 
-// RegisterUsingCheckpoint is a paid mutator transaction binding the contract method 0x7b69eff0.
+// RegisterUsingCheckpoint is a paid mutator transaction binding the contract method 0x25953845.
 //
-// Solidity: function registerUsingCheckpoint(uint256 chainId, bytes checkpointBlock, bytes32 checkpointHash, bytes checkpointSignature, address bridgeAddress, uint32 epochLength) returns()
-func (_RelayHub *RelayHubSession) RegisterUsingCheckpoint(chainId *big.Int, checkpointBlock []byte, checkpointHash [32]byte, checkpointSignature []byte, bridgeAddress common.Address, epochLength uint32) (*types.Transaction, error) {
-	return _RelayHub.Contract.RegisterUsingCheckpoint(&_RelayHub.TransactOpts, chainId, checkpointBlock, checkpointHash, checkpointSignature, bridgeAddress, epochLength)
+// Solidity: function registerUsingCheckpoint(uint256 chainId, bytes checkpointBlock, bytes32 checkpointHash, address bridgeAddress, uint32 epochLength) returns()
+func (_RelayHub *RelayHubSession) RegisterUsingCheckpoint(chainId *big.Int, checkpointBlock []byte, checkpointHash [32]byte, bridgeAddress common.Address, epochLength uint32) (*types.Transaction, error) {
+	return _RelayHub.Contract.RegisterUsingCheckpoint(&_RelayHub.TransactOpts, chainId, checkpointBlock, checkpointHash, bridgeAddress, epochLength)
 }
 
-// RegisterUsingCheckpoint is a paid mutator transaction binding the contract method 0x7b69eff0.
+// RegisterUsingCheckpoint is a paid mutator transaction binding the contract method 0x25953845.
 //
-// Solidity: function registerUsingCheckpoint(uint256 chainId, bytes checkpointBlock, bytes32 checkpointHash, bytes checkpointSignature, address bridgeAddress, uint32 epochLength) returns()
-func (_RelayHub *RelayHubTransactorSession) RegisterUsingCheckpoint(chainId *big.Int, checkpointBlock []byte, checkpointHash [32]byte, checkpointSignature []byte, bridgeAddress common.Address, epochLength uint32) (*types.Transaction, error) {
-	return _RelayHub.Contract.RegisterUsingCheckpoint(&_RelayHub.TransactOpts, chainId, checkpointBlock, checkpointHash, checkpointSignature, bridgeAddress, epochLength)
+// Solidity: function registerUsingCheckpoint(uint256 chainId, bytes checkpointBlock, bytes32 checkpointHash, address bridgeAddress, uint32 epochLength) returns()
+func (_RelayHub *RelayHubTransactorSession) RegisterUsingCheckpoint(chainId *big.Int, checkpointBlock []byte, checkpointHash [32]byte, bridgeAddress common.Address, epochLength uint32) (*types.Transaction, error) {
+	return _RelayHub.Contract.RegisterUsingCheckpoint(&_RelayHub.TransactOpts, chainId, checkpointBlock, checkpointHash, bridgeAddress, epochLength)
 }
 
 // UpdateValidatorSet is a paid mutator transaction binding the contract method 0xf874421e.
@@ -437,6 +489,27 @@ func (_RelayHub *RelayHubSession) UpdateValidatorSet(chainId *big.Int, blockProo
 // Solidity: function updateValidatorSet(uint256 chainId, bytes[] blockProofs) returns()
 func (_RelayHub *RelayHubTransactorSession) UpdateValidatorSet(chainId *big.Int, blockProofs [][]byte) (*types.Transaction, error) {
 	return _RelayHub.Contract.UpdateValidatorSet(&_RelayHub.TransactOpts, chainId, blockProofs)
+}
+
+// UpdateValidatorSetUsingEpochBlocks is a paid mutator transaction binding the contract method 0x383d0ad9.
+//
+// Solidity: function updateValidatorSetUsingEpochBlocks(uint256 chainId, bytes[] blockProofs) returns()
+func (_RelayHub *RelayHubTransactor) UpdateValidatorSetUsingEpochBlocks(opts *bind.TransactOpts, chainId *big.Int, blockProofs [][]byte) (*types.Transaction, error) {
+	return _RelayHub.contract.Transact(opts, "updateValidatorSetUsingEpochBlocks", chainId, blockProofs)
+}
+
+// UpdateValidatorSetUsingEpochBlocks is a paid mutator transaction binding the contract method 0x383d0ad9.
+//
+// Solidity: function updateValidatorSetUsingEpochBlocks(uint256 chainId, bytes[] blockProofs) returns()
+func (_RelayHub *RelayHubSession) UpdateValidatorSetUsingEpochBlocks(chainId *big.Int, blockProofs [][]byte) (*types.Transaction, error) {
+	return _RelayHub.Contract.UpdateValidatorSetUsingEpochBlocks(&_RelayHub.TransactOpts, chainId, blockProofs)
+}
+
+// UpdateValidatorSetUsingEpochBlocks is a paid mutator transaction binding the contract method 0x383d0ad9.
+//
+// Solidity: function updateValidatorSetUsingEpochBlocks(uint256 chainId, bytes[] blockProofs) returns()
+func (_RelayHub *RelayHubTransactorSession) UpdateValidatorSetUsingEpochBlocks(chainId *big.Int, blockProofs [][]byte) (*types.Transaction, error) {
+	return _RelayHub.Contract.UpdateValidatorSetUsingEpochBlocks(&_RelayHub.TransactOpts, chainId, blockProofs)
 }
 
 // RelayHubChainRegisteredIterator is returned from FilterChainRegistered and is used to iterate over the raw logs and unpacked data for ChainRegistered events raised by the RelayHub contract.

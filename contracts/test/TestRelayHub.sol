@@ -7,7 +7,7 @@ import "../verifiers/FakeBlockVerifier.sol";
 
 contract TestRelayHub is RelayHub {
 
-    constructor() RelayHub(new FakeBlockVerifier()) {
+    constructor() RelayHub(new FakeBlockVerifier(), ZERO_STAKING_ADDRESS) {
     }
 
     function enableCrossChainBridge(uint256 chainId, address bridgeAddress) external {
