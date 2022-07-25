@@ -17,5 +17,5 @@ child:
   gas-limit: 10000000
 
 relayer:
-  private-key: b2d0c20acc93db54c951103422dfa648ab3560d1d7a4bfa4720ca559da4b2a5a
+  private-key: 40b98b34b4796aaf2315baf772d7cdcf2d5eafe6fe11ee751ebd40853874b30b
   grpc-address: 0.0.0.0:6565
