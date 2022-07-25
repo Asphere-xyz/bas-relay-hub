@@ -53,7 +53,7 @@ module.exports = async (deployer) => {
 
   // deploy parlia block verifier as default verifier, relay hub and other contracts
   const parliaBlockVerifier = await deployOnlyOnce(deployer, ParliaBlockVerifier)
-  const relayHub = await deployOnlyOnce(deployer, RelayHub, parliaBlockVerifier.address)
+  const relayHub = await deployOnlyOnce(deployer, RelayHub, parliaBlockVerifier.address, '0x0000000000000000000000000000000000000000')
   const simpleTokenFactory = await deployOnlyOnce(deployer, SimpleTokenFactory)
   const bridgeRouter = await deployOnlyOnce(deployer, BridgeRouter)
   const crossChainBridge = await deployOnlyOnce(deployer, CrossChainBridge)

@@ -7,7 +7,7 @@
 
 const ParliaBlockVerifier = artifacts.require("ParliaBlockVerifier");
 const SimpleValidatorChecker = artifacts.require("SimpleValidatorChecker");
-const VerifierGasMeasurer = artifacts.require("VerifierGasMeasurer");
+const VerifierGasMeasurer = artifacts.require("GasMeasurerVerifier");
 
 contract("ParliaBlockVerifier", async (accounts) => {
   const [] = accounts

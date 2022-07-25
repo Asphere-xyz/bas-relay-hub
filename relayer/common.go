@@ -32,6 +32,13 @@ func mappingValues[K comparable, V any](value map[K]V) (result []V) {
 	return result
 }
 
+func arrayApply[I any, O any, F func(I) O](value []I, fn F) (result []O) {
+	for _, v := range value {
+		result = append(result, fn(v))
+	}
+	return result
+}
+
 func waitTxToBeMined(ctx context.Context, eth *ethclient.Client, txHash common.Hash) error {
 	tries := 30
 	for tries > 0 {

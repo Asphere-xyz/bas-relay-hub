@@ -161,7 +161,7 @@ func (s *RelayService) toNodeConfig(config *Config, isRoot bool) *nodeConfig {
 }
 
 func (s *RelayService) epochWorker(source, target *nodeConfig) {
-	log := log.WithField("chain", source.chainConfig.ChainName)
+	log := log.WithField("source", source.chainConfig.ChainName).WithField("target", target.chainConfig.ChainName)
 	log.Infof("subscribing to the chain head events")
 	blockNumberChannel := s.latestBlockFetcher(source, source.client)
 	log.Infof("listening for incomming events")
@@ -202,7 +202,7 @@ func (s *RelayService) epochWorker(source, target *nodeConfig) {
 			if !success {
 				log.WithField("epoch", latestTransitionedEpoch+1).Infof("epoch is reached, doing confirmation transition")
 				if err := s.createEpochTransition(context.TODO(), source, target, waitForBlock, latestKnownBlock); err != nil {
-					log.WithError(err).Errorf("failed to create epoch transition")
+					log.WithError(err).WithField("epoch", latestTransitionedEpoch+1).Errorf("failed to create epoch transition")
 					time.Sleep(30 * time.Second)
 					break
 				}
@@ -319,6 +319,7 @@ func (s *RelayService) createEpochTransition(ctx context.Context, source, target
 			return errors.Wrapf(err, "failed to do multicall")
 		}
 	} else {
+		opts.GasLimit = 1_000_000
 		blockProofs, err := createBlockProofs(ctx, source.client, epochBlock, source.chainConfig.EpochLength)
 		if err != nil {
 			return err

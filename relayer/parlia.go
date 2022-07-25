@@ -84,17 +84,19 @@ func recoverParliaBlockSigner(header *types.Header, chainId *big.Int) (signer co
 	return signer, nil
 }
 
-func extractParliaValidators(header *types.Header) ([]common.Address, error) {
+func extractParliaValidators(header *types.Header) ([]common.Address, map[common.Address]bool, error) {
 	validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
 	if len(validatorBytes)%common.AddressLength != 0 {
-		return nil, errBadParliaBlock
+		return nil, nil, errBadParliaBlock
 	}
 	n := len(validatorBytes) / common.AddressLength
 	result := make([]common.Address, n)
+	mapping := make(map[common.Address]bool)
 	for i := 0; i < n; i++ {
 		address := make([]byte, common.AddressLength)
 		copy(address, validatorBytes[i*common.AddressLength:(i+1)*common.AddressLength])
 		result[i] = common.BytesToAddress(address)
+		mapping[common.BytesToAddress(address)] = true
 	}
-	return result, nil
+	return result, mapping, nil
 }
