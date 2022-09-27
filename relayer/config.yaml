@@ -1,7 +1,7 @@
 root:
   chain-name: chapel
   rpc-url: https://data-seed-prebsc-1-s1.binance.org:8545/
-  relay-hub-address: 0xd558F69d6d7839c0d84447391540D6dB9Ad79Aa8
+  relay-hub-address: 0x6239581190D92C570F0a0EfC21dbEF23Dec835c0
   chain-id: 97
   confirmations: 15
   gas-limit: 10000000
@@ -10,7 +10,7 @@ root:
 child:
   chain-name: bas-dev-01
   rpc-url: https://rpc.dev-01.bas.ankr.com
-  relay-hub-address: 0xa37316666e3983155C496a2614F28C0CC5C6c5Eb
+  relay-hub-address: 0x415B281E2D73D4A8C7151c9159FcDD2046CA63d3
   confirmations: 15
   chain-id: 14000
   epoch-blocks: 1200

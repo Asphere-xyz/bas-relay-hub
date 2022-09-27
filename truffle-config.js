@@ -22,7 +22,7 @@ const DEFAULT_OPTS = {
   timeoutBlocks: 50,
   skipDryRun: true,
   networkCheckTimeout: 10000000,
-  websockets: false,
+  websockets: true,
 };
 
 module.exports = {
@@ -56,7 +56,7 @@ module.exports = {
         privateKeys: [
           deployerPrivateKey,
         ],
-        providerOrUrl: "https://tokyo-maxihost-199-254-199-141.ankr.com/bsc_testnet_full_rpc_1",
+        providerOrUrl: "wss://frankfurt-thg-173-244-194-24.ankr.com/bsc_erigon_testnet_archive_ws_1",
         chainId: 97,
       }),
       network_id: "*",

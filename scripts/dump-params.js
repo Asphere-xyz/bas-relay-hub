@@ -36,6 +36,8 @@ const createChainParams = async (rpcUrl, targetFile) => {
 const DEFAULT_CHAIN_PARAMS = [
   ['bas-devnet-1', 'https://rpc.dev-01.bas.ankr.com/'],
   ['bas-devnet-2', 'https://rpc.dev-02.bas.ankr.com/'],
+  ['bas-devnet-3', 'https://rpc.dev-03.bas.ankr.com/'],
+  ['metaapes', 'https://bas.metaapesgame.com/bas_mainnet_full_rpc'],
   ['bsc', 'https://rpc.ankr.com/bsc'],
   ['chapel', 'https://data-seed-prebsc-1-s1.binance.org:8545/'],
 ];
